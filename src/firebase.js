@@ -171,6 +171,65 @@ export async function deductStockTransaction(items) {
   });
 }
 
+// ═══════════════════════════════════════════
+// ATOMIC STOCK RESTORATION (reverse of deduction)
+// ═══════════════════════════════════════════
+// items: [{ id, qty }]
+export async function restoreStockTransaction(items) {
+  if (!items || items.length === 0) return;
+  await runTransaction(db, async (transaction) => {
+    const refs = items.map((it) => ({
+      item: it,
+      ref: doc(db, "products", it.id),
+    }));
+    const snaps = [];
+    for (const r of refs) {
+      const snap = await transaction.get(r.ref);
+      if (!snap.exists()) continue; // product may have been deleted
+      const current = snap.data().stock || 0;
+      snaps.push({ ref: r.ref, current, qty: r.item.qty });
+    }
+    for (const s of snaps) {
+      transaction.update(s.ref, { stock: s.current + s.qty });
+    }
+  });
+}
+
+// ═══════════════════════════════════════════
+// CANCEL ORDER (set status + restore stock atomically)
+// ═══════════════════════════════════════════
+export async function cancelOrderWithRestock(docId, items) {
+  await restoreStockTransaction(items);
+  await updateDoc(doc(db, "orders", docId), { status: "cancelled" });
+}
+
+// ═══════════════════════════════════════════
+// DELETE ORDER (restore stock + remove document)
+// ═══════════════════════════════════════════
+export async function deleteOrderWithRestock(docId, items) {
+  await restoreStockTransaction(items);
+  await deleteDoc(doc(db, "orders", docId));
+}
+
+// ═══════════════════════════════════════════
+// ADJUST STOCK FOR ORDER EDITS
+// ═══════════════════════════════════════════
+// oldItems & newItems: [{ id, qty }]
+// Calculates diff and deducts/restores accordingly
+export async function adjustStockForOrderEdit(oldItems, newItems) {
+  const diff = {};
+  for (const it of oldItems) diff[it.id] = -(it.qty || 0);
+  for (const it of newItems) diff[it.id] = (diff[it.id] || 0) + (it.qty || 0);
+  const toDeduct = [];
+  const toRestore = [];
+  for (const [id, delta] of Object.entries(diff)) {
+    if (delta > 0) toDeduct.push({ id, qty: delta });
+    if (delta < 0) toRestore.push({ id, qty: -delta });
+  }
+  if (toRestore.length > 0) await restoreStockTransaction(toRestore);
+  if (toDeduct.length > 0) await deductStockTransaction(toDeduct);
+}
+
 // Subscribe to orders filtered by phone number (for customer order history)
 export function subscribeOrdersByPhone(phone, callback) {
   const q = query(collection(db, "orders"), where("phone", "==", phone));
