@@ -182,6 +182,7 @@ function AdminDashboard() {
   const [oFilter,setOFilter]=useState("all");const [search,setSearch]=useState("");const [notif,setNotif]=useState("");const [prf,setPrf]=useState({code:"",type:"percent",value:0,minOrder:0,active:true});
   const trackingTimers=useRef({});const stockTimers=useRef({});
   const [dragIdx,setDragIdx]=useState(null);const [dragOverIdx,setDragOverIdx]=useState(null);
+  const [pSearch,setPSearch]=useState("");const [pSort,setPSort]=useState("order");const [pCatFilter,setPCatFilter]=useState("all");
 
   useEffect(()=>{
     const unsubs=[];
@@ -226,7 +227,21 @@ function AdminDashboard() {
         {fOrders.map(o=><div key={o._docId||o.orderNum} style={{background:"#FFF",borderRadius:12,padding:16,marginBottom:10,border:`1px solid ${C.border}`,borderLeft:`4px solid ${STATUS[o.status]?.color||"#CCC"}`}}><div style={{display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:8}}><div><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}><span style={{fontWeight:800,fontSize:16,color:C.primary}}>{o.orderNum}</span><span style={{fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:6,background:STATUS[o.status]?.bg,color:STATUS[o.status]?.color}}>{STATUS[o.status]?.label}</span></div><div style={{fontSize:13,color:C.tLight}}>{o.customer?.name} · {o.phone}</div><div style={{fontSize:12,color:C.tLight}}>{o.customer?.address}, {o.customer?.city}, {o.customer?.state} {o.customer?.zip}</div><div style={{fontSize:12,color:C.tLight}}>{o.deliveryMethod==="irvine"?"🏠 얼바인 배달":o.deliveryMethod==="buena_park"?"📍 부에나파크 픽업":"🚚 택배"}{o.customer?.gateCode&&` · Gate: ${o.customer.gateCode}`}{o.paymentMethod&&` · ${o.paymentMethod}`}</div></div><div style={{textAlign:"right"}}><div style={{fontWeight:800,fontSize:18}}>${(o.total||0).toFixed(2)}</div><div style={{fontSize:11,color:C.tLight}}>{getOrderDate(o)}</div></div></div><div style={{margin:"10px 0",padding:"8px 12px",background:"#F8F9FA",borderRadius:8}}>{(o.items||[]).map((it,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"2px 0"}}><span>{it.name} × {it.qty}</span><span style={{fontWeight:600}}>${(it.price*it.qty).toFixed(2)}</span></div>)}{(o.discount||0)>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:C.danger}}><span>할인</span><span>-${o.discount.toFixed(2)}</span></div>}<div style={{display:"flex",justifyContent:"space-between",fontSize:12}}><span>배송비</span><span>{o.shipping===0?"무료":`$${(o.shipping||0).toFixed(2)}`}</span></div></div><div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>{o.status==="pending_payment"&&<button onClick={()=>handleOrderStatus(o._docId,"confirmed",`${o.orderNum} → 결제 확인`)} style={{...BTNS,background:C.warn}}>💳 결제 확인</button>}{o.status==="payment_submitted"&&<button onClick={()=>handleOrderStatus(o._docId,"confirmed",`${o.orderNum} → 결제 승인`)} style={{...BTNS,background:C.success}}>✓ 결제 승인</button>}{o.status==="confirmed"&&<button onClick={()=>handleOrderStatus(o._docId,"preparing",`${o.orderNum} → 준비중`)} style={{...BTNS,background:"#2980B9"}}>📦 준비 시작</button>}{(o.status==="preparing"||o.status==="confirmed")&&<div style={{display:"flex",gap:6,alignItems:"center"}}><input value={o.trackingNum||""} onChange={e=>handleTrackingUpdate(o._docId,e.target.value)} placeholder="트래킹 번호" style={{...INP,maxWidth:200,padding:"6px 10px",fontSize:12}}/>{o.trackingNum&&<button onClick={()=>handleOrderStatus(o._docId,"shipped",`${o.orderNum} → 발송`)} style={{...BTNS,background:"#8E44AD"}}>🚚 발송</button>}</div>}{o.status==="shipped"&&<button onClick={()=>handleOrderStatus(o._docId,"delivered",`${o.orderNum} → 배송완료`)} style={{...BTNS,background:"#2C3E50"}}>✓ 배송 완료</button>}{(o.status==="confirmed"||o.status==="preparing")&&(o.deliveryMethod==="irvine"||o.deliveryMethod==="buena_park")&&<button onClick={()=>handleOrderStatus(o._docId,"delivered",`${o.orderNum} → ${o.deliveryMethod==="irvine"?"배달":"픽업"} 완료`)} style={{...BTNS,background:"#2C3E50"}}>{o.deliveryMethod==="irvine"?"🏠 배달 완료":"📍 픽업 완료"}</button>}{o.status!=="cancelled"&&o.status!=="delivered"&&<button onClick={()=>handleOrderStatus(o._docId,"cancelled",`${o.orderNum} → 취소`)} style={{...BTNS,background:"#95A5A6"}}>✕ 취소</button>}{o.trackingNum&&<a href={o.trackingNum.trim().toUpperCase().startsWith("1Z")?`https://www.ups.com/track?tracknum=${o.trackingNum.trim()}`:(o.trackingNum.trim().length>=20?`https://tools.usps.com/go/TrackConfirmAction?tLabels=${o.trackingNum.trim()}`:`https://www.fedex.com/fedextrack/?trknbr=${o.trackingNum.trim()}`)} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:"#8E44AD",fontWeight:600,textDecoration:"underline",cursor:"pointer"}}>📍 {o.trackingNum} →</a>}{PREV_STATUS[o.status]&&<button onClick={()=>{if(window.confirm(`${o.orderNum}: ${STATUS[o.status]?.label} → ${STATUS[PREV_STATUS[o.status]]?.label} 되돌리시겠습니까?`))handleOrderStatus(o._docId,PREV_STATUS[o.status],`${o.orderNum} ← ${STATUS[PREV_STATUS[o.status]]?.label}`);}} style={{...BTNS,background:"transparent",color:C.tLight,border:`1px solid ${C.border}`}}>↩ 되돌리기</button>}</div></div>)}</div>}
 
         {loaded&&tab==="products"&&(()=>{
-          const sorted=[...products].sort((a,b)=>{const ao=typeof a.order==="number"?a.order:9999;const bo=typeof b.order==="number"?b.order:9999;return ao!==bo?ao-bo:(a.nameKo||"").localeCompare(b.nameKo||"");});
+          const base=[...products].filter(p=>{
+            if(pCatFilter!=="all"&&p.category!==pCatFilter)return false;
+            if(!pSearch)return true;
+            const q=pSearch.toLowerCase();
+            return (p.nameKo||"").toLowerCase().includes(q)||(p.nameEn||"").toLowerCase().includes(q)||(p.brand||"").toLowerCase().includes(q);
+          });
+          const sorted=base.sort((a,b)=>{
+            if(pSort==="order"){const ao=typeof a.order==="number"?a.order:9999;const bo=typeof b.order==="number"?b.order:9999;return ao!==bo?ao-bo:(a.nameKo||"").localeCompare(b.nameKo||"");}
+            if(pSort==="name")return(a.nameKo||"").localeCompare(b.nameKo||"");
+            if(pSort==="price")return(a.sale?a.salePrice:a.price)-(b.sale?b.salePrice:b.price);
+            if(pSort==="priceDesc")return(b.sale?b.salePrice:b.price)-(a.sale?a.salePrice:a.price);
+            if(pSort==="stock")return a.stock-b.stock;
+            if(pSort==="stockDesc")return b.stock-a.stock;
+            return 0;
+          });
           const handleDrop=async(e,targetIdx)=>{
             e.preventDefault();
             if(dragIdx===null||dragIdx===targetIdx){setDragIdx(null);setDragOverIdx(null);return;}
@@ -245,13 +260,29 @@ function AdminDashboard() {
               <h2 style={{fontFamily:"'DM Serif Display',serif",fontSize:24,margin:0}}>🏷️ 제품 관리</h2>
               <button onClick={()=>openProductForm(null)} style={BTN}>+ 제품 추가</button>
             </div>
-            <div style={{fontSize:11,color:C.tLight,marginBottom:12,padding:"8px 12px",background:"#F8F9FA",borderRadius:8,border:`1px dashed ${C.border}`}}>
-              💡 제품 카드를 드래그해서 순서를 변경하세요. 놓을 위치에 방향 표시가 나타납니다. 변경 즉시 고객 사이트에 반영됩니다.
+            <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap",alignItems:"center"}}>
+              <input value={pSearch} onChange={e=>setPSearch(e.target.value)} placeholder="제품명, 브랜드 검색..." style={{...INP,maxWidth:220,padding:"8px 12px",fontSize:12}}/>
+              <select value={pCatFilter} onChange={e=>setPCatFilter(e.target.value)} style={{...INP,maxWidth:150,padding:"8px 12px",fontSize:12}}>
+                <option value="all">전체 카테고리</option>
+                {Object.entries(categories).map(([id,name])=><option key={id} value={id}>{name}</option>)}
+              </select>
+              <select value={pSort} onChange={e=>setPSort(e.target.value)} style={{...INP,maxWidth:150,padding:"8px 12px",fontSize:12}}>
+                <option value="order">순서 (드래그)</option>
+                <option value="name">이름순</option>
+                <option value="price">가격 낮은순</option>
+                <option value="priceDesc">가격 높은순</option>
+                <option value="stock">재고 적은순</option>
+                <option value="stockDesc">재고 많은순</option>
+              </select>
+              <span style={{fontSize:11,color:C.tLight}}>{sorted.length}개 제품</span>
             </div>
+            {pSort==="order"&&<div style={{fontSize:11,color:C.tLight,marginBottom:12,padding:"8px 12px",background:"#F8F9FA",borderRadius:8,border:`1px dashed ${C.border}`}}>
+              💡 드래그해서 순서 변경 · 변경 즉시 고객 사이트 반영
+            </div>}
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:12}}>
               {sorted.map((p,idx)=><div key={p.id}
-                draggable
-                onDragStart={()=>setDragIdx(idx)}
+                draggable={pSort==="order"&&!pSearch&&pCatFilter==="all"}
+                onDragStart={()=>{if(pSort==="order"&&!pSearch&&pCatFilter==="all")setDragIdx(idx);}}
                 onDragOver={e=>{e.preventDefault();if(dragOverIdx!==idx)setDragOverIdx(idx);}}
                 onDragLeave={()=>{if(dragOverIdx===idx)setDragOverIdx(null);}}
                 onDrop={e=>handleDrop(e,idx)}

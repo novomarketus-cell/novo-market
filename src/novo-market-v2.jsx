@@ -242,6 +242,7 @@ export default function NovoMarket() {
   const [lang, setLang] = useState("ko");
   const [page, setPage] = useState("shop");
   const [cat, setCat] = useState("all");
+  const [brandFilter, setBrandFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState([]);
   const [toast, setToast] = useState(null);
@@ -284,6 +285,7 @@ export default function NovoMarket() {
   const catList = useMemo(() => Object.entries(categories).map(([id, data]) => ({
     id, nameEn: typeof data === "string" ? data : (data.nameEn || id), nameKo: typeof data === "string" ? data : (data.nameKo || data),
   })), [categories]);
+  const brandList = useMemo(() => [...new Set(activeProducts.map(p => p.brand).filter(Boolean))].sort(), [activeProducts]);
 
   const addToCart = p => { setCart(prev => { const ex = prev.find(c => c.id === p.id); if (ex) return prev.map(c => c.id === p.id ? { ...c, qty: c.qty + 1 } : c); return [...prev, { ...p, qty: 1 }]; }); setToast(t.added); };
   const updQty = (id, d) => setCart(prev => prev.map(c => c.id === id ? { ...c, qty: Math.max(1, c.qty + d) } : c));
@@ -298,9 +300,10 @@ export default function NovoMarket() {
 
   const filtered = useMemo(() => activeProducts.filter(p => {
     if (cat !== "all" && p.category !== cat) return false;
+    if (brandFilter !== "all" && p.brand !== brandFilter) return false;
     const n = lang === "en" ? (p.nameEn || "") : (p.nameKo || "");
     return !search || n.toLowerCase().includes(search.toLowerCase());
-  }), [cat, search, lang, activeProducts]);
+  }), [cat, brandFilter, search, lang, activeProducts]);
 
   const handleInfoChange = (key, val) => {
     if (key === "phone") setInfo(p => ({ ...p, phone: formatPhone(val) }));
@@ -575,6 +578,10 @@ export default function NovoMarket() {
         <button onClick={() => setCat("all")} style={{ ...B, padding: "5px 12px", fontSize: 11, whiteSpace: "nowrap", background: cat === "all" ? C.pri : C.wh, color: cat === "all" ? "#FFF" : C.light, border: `1px solid ${cat === "all" ? C.pri : C.bdr}` }}>{t.allCat}</button>
         {catList.map(c => <button key={c.id} onClick={() => setCat(c.id)} style={{ ...B, padding: "5px 12px", fontSize: 11, whiteSpace: "nowrap", background: cat === c.id ? C.pri : C.wh, color: cat === c.id ? "#FFF" : C.light, border: `1px solid ${cat === c.id ? C.pri : C.bdr}` }}>{lang === "en" ? c.nameEn : c.nameKo}</button>)}
       </div>
+      {brandList.length > 0 && <div style={{ display: "flex", gap: 5, overflowX: "auto", paddingBottom: 8, marginBottom: 4 }}>
+        <button onClick={() => setBrandFilter("all")} style={{ ...B, padding: "4px 10px", fontSize: 10, whiteSpace: "nowrap", background: brandFilter === "all" ? C.acc : C.wh, color: brandFilter === "all" ? "#FFF" : C.light, border: `1px solid ${brandFilter === "all" ? C.acc : C.bdr}`, borderRadius: 14 }}>{lang === "en" ? "All Brands" : "전체 브랜드"}</button>
+        {brandList.map(b => <button key={b} onClick={() => setBrandFilter(b)} style={{ ...B, padding: "4px 10px", fontSize: 10, whiteSpace: "nowrap", background: brandFilter === b ? C.acc : C.wh, color: brandFilter === b ? "#FFF" : C.light, border: `1px solid ${brandFilter === b ? C.acc : C.bdr}`, borderRadius: 14 }}>{b}</button>)}
+      </div>}
       <div style={{ background: C.accBg, borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: 12, color: C.acc, fontWeight: 600 }}>🚚 {t.freeNote}</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         {filtered.map(p => {
@@ -585,7 +592,9 @@ export default function NovoMarket() {
             {p.media && p.media.length > 1 && <div style={{ position: "absolute", top: 6, right: 6, background: "rgba(0,0,0,.5)", color: "#FFF", borderRadius: 10, padding: "1px 6px", fontSize: 9, fontWeight: 600, zIndex: 2 }}>📷 {p.media.length}</div>}
             <div style={{ height: 150, background: "#F5F2ED", flexShrink: 0 }}>{hasImg ? <LazyImg src={p.media[0].url} alt={nm} style={{ width: "100%", height: 150 }} /> : <div style={{ height: 150, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 48 }}>{p.image || "📦"}</div>}</div>
             <div style={{ padding: "8px 10px 10px", display: "flex", flexDirection: "column", flex: 1 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.3, marginBottom: 4, minHeight: 28 }}>{nm}</div>
+              {p.brand && <div style={{ fontSize: 9, color: C.acc, fontWeight: 700, marginBottom: 1 }}>{p.brand}</div>}
+              <div style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.3, marginBottom: 1, minHeight: 14 }}>{p.nameKo || ""}</div>
+              <div style={{ fontSize: 9, color: C.light, lineHeight: 1.2, marginBottom: 4, minHeight: 12 }}>{p.nameEn || ""}</div>
               <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4 }}>{p.sale ? <><span style={{ fontSize: 14, fontWeight: 800, color: C.danger }}>{fmt(pr)}</span><span style={{ fontSize: 10, color: C.light, textDecoration: "line-through" }}>{fmt(p.price)}</span></> : <span style={{ fontSize: 14, fontWeight: 800, color: C.pri }}>{fmt(pr)}</span>}</div>
               <div style={{ minHeight: 20, marginBottom: 4 }}>
                 {p.tiered && p.tiered.length > 0 && <div style={{ fontSize: 9, color: C.pri, fontWeight: 600, background: C.priL, padding: "2px 6px", borderRadius: 4, display: "inline-block" }}>📦 {p.tiered[0].qty}+ {fmt(Number(p.tiered[0].price))}</div>}
