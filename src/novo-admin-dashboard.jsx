@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   subscribeProducts, subscribeOrders, subscribePromos, subscribeCategories,
-  addProduct, updateProduct, deleteProduct, reorderProducts,
-  updateOrderStatus, updateOrderField,
+  addProduct, updateProduct, deleteProduct,
+  updateOrderStatus, updateOrderField, deleteOrder,
   saveCategory, deleteCategory,
   addPromo, updatePromo, deletePromo,
   uploadProductMedia,
-  loginAdmin, logoutAdmin, subscribeAuth,
+  loginAdmin, logoutAdmin, subscribeAuth, reorderProducts,
 } from "./firebase";
 
 // MODULE-LEVEL CONSTANTS (never re-created)
@@ -19,6 +19,13 @@ const STATUS = {
   delivered: { label: "배송 완료", color: "#2C3E50", bg: "#ECEFF1" },
   cancelled: { label: "취소", color: "#95A5A6", bg: "#F5F5F5" },
 };
+const PREV_STATUS = {
+  payment_submitted: "pending_payment",
+  confirmed: "payment_submitted",
+  preparing: "confirmed",
+  shipped: "preparing",
+  delivered: "shipped",
+};
 const C = { bg:"#F0F2F5", primary:"#2D5A3D", pLight:"#E8F0EB", accent:"#D4956A", aLight:"#FFF3EB", text:"#1A1A1A", tLight:"#7A8599", border:"#E4E7EC", danger:"#E74C3C", dLight:"#FDEDED", success:"#27AE60", warn:"#F39C12", wLight:"#FFF8E1" };
 const INP = { width:"100%", border:`1px solid ${C.border}`, borderRadius:"8px", padding:"10px 12px", fontSize:"13px", fontFamily:"'DM Sans',sans-serif", boxSizing:"border-box", outline:"none" };
 const BTN = { border:"none", borderRadius:"8px", cursor:"pointer", fontWeight:600, fontFamily:"'DM Sans',sans-serif", background:C.primary, color:"#FFF", padding:"10px 20px", fontSize:"13px" };
@@ -30,6 +37,12 @@ const TAG_PRESETS = [
   {label:"인기상품",color:"#FFF0F3",textColor:"#C2185B"},{label:"신상품",color:"#F3E5F5",textColor:"#7B1FA2"},
 ];
 const LBL = { fontSize:12, fontWeight:600, color:C.tLight, display:"block", marginBottom:4 };
+
+// CSV injection defense function
+const esc = (v) => {
+  const s = String(v ?? "");
+  return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+};
 
 // TAB ORDER: 대시보드 → 주문관리 → 재고관리 → 제품관리 → 카테고리 → 프로모션
 const TABS = [
@@ -84,228 +97,577 @@ function ProductFormModal({ initialData, initialCategories, editPid, onDone, onC
         <div style={{marginBottom:12}}><label style={LBL}>가격 ($)</label><input value={pf.price} onChange={e=>setPf(p=>({...p,price:e.target.value}))} type="number" placeholder="0.00" style={INP}/></div>
         <div style={{marginBottom:12}}><label style={LBL}>재고</label><input value={pf.stock} onChange={e=>setPf(p=>({...p,stock:e.target.value}))} type="number" placeholder="0" style={INP}/></div>
         <div style={{marginBottom:12}}><label style={LBL}>이모지 (대체용)</label><input value={pf.image} onChange={e=>setPf(p=>({...p,image:e.target.value}))} type="text" style={INP}/></div>
-        <div style={{marginBottom:12}}><label style={LBL}>📝 제품 설명 (한국어)</label><textarea value={pf.descKo||""} onChange={e=>setPf(p=>({...p,descKo:e.target.value}))} placeholder="예: 4개월 이상 아기를 위한 유기농 쌀미음&#10;&#10;**굵게** 표시 가능, 줄바꿈 지원" rows={5} style={{...INP,resize:"vertical",lineHeight:1.5}}/><div style={{fontSize:10,color:C.tLight,marginTop:4}}>💡 <code style={{background:"#F0F0F0",padding:"1px 4px",borderRadius:3}}>**굵게**</code>로 강조, Enter로 줄바꿈</div></div>
-        <div style={{marginBottom:12}}><label style={LBL}>📝 Description (EN)</label><textarea value={pf.descEn||""} onChange={e=>setPf(p=>({...p,descEn:e.target.value}))} placeholder="e.g. Organic rice porridge for babies 4+ months&#10;&#10;Use **bold** for emphasis" rows={5} style={{...INP,resize:"vertical",lineHeight:1.5}}/><div style={{fontSize:10,color:C.tLight,marginTop:4}}>💡 <code style={{background:"#F0F0F0",padding:"1px 4px",borderRadius:3}}>**bold**</code> for emphasis, Enter for line breaks</div></div>
+        <div style={{marginBottom:12}}><label style={LBL}>📝 제품 설명 (한국어)</label><textarea value={pf.descKo||""} onChange={e=>setPf(p=>({...p,descKo:e.target.value}))} placeholder="예: 4개월 이상 아기를 위한 유기농 쌀미음" rows={3} style={{...INP,resize:"vertical"}}/></div>
+        <div style={{marginBottom:12}}><label style={LBL}>📝 Description (EN)</label><textarea value={pf.descEn||""} onChange={e=>setPf(p=>({...p,descEn:e.target.value}))} placeholder="e.g. Organic rice porridge for babies 4+ months" rows={3} style={{...INP,resize:"vertical"}}/></div>
         <div style={{marginBottom:12}}>
           <label style={{...LBL,marginBottom:6}}>🏷️ 제품 태그</label>
           <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>{(pf.tags||[]).map((tag,i)=>(<span key={i} style={{display:"inline-flex",alignItems:"center",gap:6,background:tag.color||"#EAF5FA",color:tag.textColor||"#2980B9",padding:"5px 12px",borderRadius:20,fontSize:12,fontWeight:600}}><span>{tag.label}</span><button onClick={()=>setPf(p=>{const nt=[...(p.tags||[])];nt.splice(i,1);return{...p,tags:nt};})} style={{background:"none",border:"none",cursor:"pointer",color:"inherit",fontSize:13,padding:0,lineHeight:1,fontWeight:700}}>✕</button></span>))}</div>
           <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:8}}>{TAG_PRESETS.map(preset=>(<button key={preset.label} onClick={()=>setPf(p=>{if((p.tags||[]).some(t=>t.label===preset.label))return p;return{...p,tags:[...(p.tags||[]),preset]};})} style={{...BTNS,padding:"3px 8px",fontSize:10,background:preset.color,color:preset.textColor,border:`1px solid ${preset.textColor}22`,opacity:(pf.tags||[]).some(t=>t.label===preset.label)?0.4:1}}>+ {preset.label}</button>))}</div>
           <div style={{fontSize:11,fontWeight:600,color:C.tLight,marginBottom:4}}>커스텀 태그 추가</div>
           <div style={{display:"flex",gap:6,marginBottom:6,alignItems:"center"}}>
-            <input id="novo-custom-tag" placeholder="태그 이름 입력" style={{...INP,flex:1,padding:"6px 10px",fontSize:12}}/>
-            <button onClick={()=>{const el=document.getElementById("novo-custom-tag");if(!el||!el.value.trim())return;setPf(p=>({...p,tags:[...(p.tags||[]),{label:el.value.trim(),color:customColor.bg,textColor:customColor.fg}]}));el.value="";}} style={{...BTNS,background:C.primary,whiteSpace:"nowrap"}}>+ 추가</button>
-          </div>
-          <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:8,alignItems:"center"}}>
-            <span style={{fontSize:10,color:C.tLight,marginRight:2}}>색상:</span>
-            {[{label:"흰색",bg:"#FFFFFF",fg:"#333333"},{label:"빨강",bg:"#FDEDED",fg:"#C0392B"},{label:"주황",bg:"#FFF3E0",fg:"#E67E22"},{label:"노랑",bg:"#FFF8E1",fg:"#F57F17"},{label:"초록",bg:"#E8F5E9",fg:"#2E7D32"},{label:"파랑",bg:"#E3F2FD",fg:"#1565C0"},{label:"보라",bg:"#F3E5F5",fg:"#7B1FA2"},{label:"분홍",bg:"#FFF0F3",fg:"#C2185B"},{label:"하늘",bg:"#E0F7FA",fg:"#00838F"},{label:"회색",bg:"#F5F5F5",fg:"#555555"}].map(c2=>(
-              <button key={c2.label} onClick={()=>setCustomColor({bg:c2.bg,fg:c2.fg})} style={{padding:"4px 10px",borderRadius:12,fontSize:10,fontWeight:600,border:`1px solid ${c2.fg}33`,background:c2.bg,color:c2.fg,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",outline:customColor.bg===c2.bg?"2px solid #333":"none",outlineOffset:1}}>
-                {c2.label}
-              </button>
-            ))}
+            <input value={pf.customTag||""} onChange={e=>setPf(p=>({...p,customTag:e.target.value}))} placeholder="태그명" style={{...INP,flex:1,fontSize:12}}/>
+            <input type="color" value={customColor.bg} onChange={e=>setCustomColor({...customColor,bg:e.target.value})} style={{width:40,height:40,border:`1px solid ${C.border}`,borderRadius:8,cursor:"pointer"}}/>
+            <input type="color" value={customColor.fg} onChange={e=>setCustomColor({...customColor,fg:e.target.value})} style={{width:40,height:40,border:`1px solid ${C.border}`,borderRadius:8,cursor:"pointer"}}/>
+            <button onClick={()=>{if(pf.customTag){setPf(p=>({...p,tags:[...(p.tags||[]),{label:pf.customTag,color:customColor.bg,textColor:customColor.fg}],customTag:""}));setCustomColor({bg:"#FFFFFF",fg:"#333333"});}}} style={{...BTNS,whiteSpace:"nowrap"}}>추가</button>
           </div>
         </div>
         <div style={{marginBottom:12}}>
-          <label style={{...LBL,marginBottom:8}}>📷 제품 이미지/영상 (최대 10개)</label>
-          {(pf.media||[]).length<10&&<div style={{marginBottom:10}}>
-            <div onDragOver={e=>{e.preventDefault();e.currentTarget.style.borderColor=C.primary;}} onDragLeave={e=>{e.currentTarget.style.borderColor=C.border;}} onDrop={e=>{e.preventDefault();e.currentTarget.style.borderColor=C.border;handleFileSelect(e.dataTransfer.files);}} style={{border:`2px dashed ${C.border}`,borderRadius:12,padding:"20px 16px",textAlign:"center",cursor:"pointer",background:"#FAFAFA"}} onClick={()=>document.getElementById("novo-file-input")?.click()}><div style={{fontSize:28,marginBottom:6}}>📤</div><div style={{fontSize:13,fontWeight:600,color:C.tLight}}>사진을 끌어오거나 탭하세요</div></div>
-            <input id="novo-file-input" type="file" accept="image/*,video/*" multiple capture="environment" style={{display:"none"}} onChange={e=>{handleFileSelect(e.target.files);e.target.value="";}}/>
-            <div style={{display:"flex",gap:6,marginTop:8}}><button onClick={()=>{const i=document.getElementById("novo-file-input");if(i){i.removeAttribute("capture");i.click();}}} style={{...BTNS,background:"#3498DB",flex:1}}>📁 갤러리</button><button onClick={()=>{const i=document.getElementById("novo-file-input");if(i){i.setAttribute("capture","environment");i.click();}}} style={{...BTNS,background:C.primary,flex:1}}>📸 카메라</button><button onClick={()=>setPf(p=>({...p,media:[...(p.media||[]),{type:"image",url:"",alt:""}]}))} style={{...BTNS,background:"#7F8C8D",flex:1}}>🔗 URL</button></div>
-          </div>}
-          {(pf.media||[]).length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(90px,1fr))",gap:8,marginTop:8}}>{(pf.media||[]).map((m,i)=>(<div key={i} style={{position:"relative",borderRadius:8,overflow:"hidden",border:`1px solid ${C.border}`,background:"#F0EDE8"}}>{m.type==="video"?<div style={{width:"100%",height:90,display:"flex",alignItems:"center",justifyContent:"center",background:"#1A1A1A"}}><span style={{fontSize:24,color:"#FFF"}}>🎬</span></div>:m.url?<img src={m.url} alt="" style={{width:"100%",height:90,objectFit:"contain",display:"block",background:"#F5F2ED"}} onError={e=>{e.target.style.display="none";}}/>:<div style={{width:"100%",height:90,display:"flex",alignItems:"center",justifyContent:"center"}}><input value={m.url} onChange={e=>setPf(p=>{const nm=[...(p.media||[])];nm[i]={...nm[i],url:e.target.value};return{...p,media:nm};})} placeholder="URL" style={{width:"80%",border:`1px solid ${C.border}`,borderRadius:4,padding:"4px 6px",fontSize:10,textAlign:"center"}}/></div>}<button onClick={()=>{setPf(p=>{const nm=[...(p.media||[])];nm.splice(i,1);return{...p,media:nm};});setPendingFiles(pf2=>pf2.filter(f=>f.index!==i).map(f=>f.index>i?{...f,index:f.index-1}:f));}} style={{position:"absolute",top:3,right:3,width:20,height:20,borderRadius:"50%",border:"none",background:"rgba(0,0,0,0.6)",color:"#FFF",fontSize:11,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>✕</button>{i===0&&<div style={{position:"absolute",bottom:3,left:3,background:C.primary,color:"#FFF",fontSize:8,fontWeight:700,padding:"1px 5px",borderRadius:3}}>대표</div>}</div>))}</div>}
-          {(pf.media||[]).length>0&&<div style={{fontSize:11,color:C.tLight,marginTop:6}}>📷 {(pf.media||[]).filter(m=>m.type==="image").length}개 이미지 · 🎬 {(pf.media||[]).filter(m=>m.type==="video").length}개 영상{pendingFiles.length>0&&<span style={{color:C.warn,marginLeft:8}}>⏳ {pendingFiles.length}개 대기중</span>}</div>}
+          <label style={{...LBL,marginBottom:6}}>카테고리</label>
+          <select value={pf.category||""} onChange={e=>setPf(p=>({...p,category:e.target.value}))} style={INP}>
+            <option value="">-- 선택 --</option>
+            {Object.keys(initialCategories||{}).map(cid=><option key={cid} value={cid}>{initialCategories[cid]?.name||cid}</option>)}
+          </select>
         </div>
-        <div style={{marginBottom:12}}><label style={LBL}>카테고리</label><select value={pf.category} onChange={e=>setPf(p=>({...p,category:e.target.value}))} style={INP}>{Object.entries(initialCategories).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></div>
-        <div style={{display:"flex",gap:12,marginBottom:12}}><label style={{display:"flex",alignItems:"center",gap:6,fontSize:13,cursor:"pointer"}}><input type="checkbox" checked={pf.sale} onChange={e=>setPf(p=>({...p,sale:e.target.checked}))}/>세일</label><label style={{display:"flex",alignItems:"center",gap:6,fontSize:13,cursor:"pointer"}} title="체크 해제 시 고객 사이트에서 이 제품이 숨겨집니다"><input type="checkbox" checked={pf.active} onChange={e=>setPf(p=>({...p,active:e.target.checked}))}/>사이트에 표시</label></div>
-        {!pf.active&&<div style={{background:C.wLight,border:`1px solid ${C.warn}33`,borderRadius:8,padding:"8px 12px",fontSize:11,color:C.warn,fontWeight:600,marginBottom:12}}>⚠️ "사이트에 표시"가 꺼져 있으면 고객에게 이 제품이 보이지 않습니다</div>}
-        {pf.sale&&<div style={{marginBottom:12}}><label style={LBL}>세일 가격</label><input value={pf.salePrice} onChange={e=>setPf(p=>({...p,salePrice:e.target.value}))} type="number" placeholder="0.00" style={INP}/></div>}
-        <div style={{marginBottom:14}}>
-          <label style={{...LBL,marginBottom:6}}>📦 수량별 할인 (선택사항)</label>
-          {(pf.tiered||[]).map((tier,i)=>(<div key={i} style={{display:"flex",gap:6,marginBottom:6,alignItems:"center"}}><div style={{flex:1}}><input value={tier.qty} onChange={e=>setPf(p=>{const nt=[...(p.tiered||[])];nt[i]={...nt[i],qty:e.target.value};return{...p,tiered:nt};})} type="number" placeholder="수량" style={{...INP,padding:"6px 10px",fontSize:12}}/></div><span style={{fontSize:12,color:C.tLight}}>개 이상 →</span><div style={{flex:1}}><input value={tier.price} onChange={e=>setPf(p=>{const nt=[...(p.tiered||[])];nt[i]={...nt[i],price:e.target.value};return{...p,tiered:nt};})} type="number" step="0.01" placeholder="개당 가격" style={{...INP,padding:"6px 10px",fontSize:12}}/></div><span style={{fontSize:12,color:C.tLight}}>$</span><button onClick={()=>setPf(p=>{const nt=[...(p.tiered||[])];nt.splice(i,1);return{...p,tiered:nt};})} style={{...BTNS,padding:"4px 8px",background:C.danger}}>✕</button></div>))}
-          <button onClick={()=>setPf(p=>({...p,tiered:[...(p.tiered||[]),{qty:"",price:""}]}))} style={{...BTNS,background:"#3498DB",marginTop:4}}>+ 수량 구간 추가</button>
+        <div style={{marginBottom:12}}>
+          <label style={{...LBL,marginBottom:6}}>❌ 할인 활성화</label>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <input type="checkbox" checked={pf.sale||false} onChange={e=>setPf(p=>({...p,sale:e.target.checked}))} style={{cursor:"pointer",width:18,height:18}}/>
+            {pf.sale&&<><label style={{...LBL,marginBottom:0}}>할인가 ($)</label><input value={pf.salePrice} onChange={e=>setPf(p=>({...p,salePrice:e.target.value}))} type="number" placeholder="0.00" style={{...INP,flex:1}}/></>}
+          </div>
         </div>
-        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}}><button onClick={onClose} style={{...BTN,background:"transparent",color:C.primary,border:`1px solid ${C.primary}`}}>취소</button><button onClick={handleSave} disabled={saving} style={{...BTN,opacity:saving?0.5:1}}>{saving?"저장 중...":"저장"}</button></div>
+        <div style={{marginBottom:12}}>
+          <label style={{...LBL,marginBottom:6}}>🎁 계층 가격제</label>
+          {(pf.tiered||[]).map((t,i)=>(<div key={i} style={{display:"flex",gap:6,marginBottom:6,alignItems:"center"}}>
+            <input value={t.qty} onChange={e=>setPf(p=>{const nt=[...(p.tiered||[])];nt[i]={...nt[i],qty:e.target.value};return{...p,tiered:nt};})} type="number" placeholder="수량" style={{...INP,flex:0.5}}/>
+            <span>개 이상</span>
+            <input value={t.price} onChange={e=>setPf(p=>{const nt=[...(p.tiered||[])];nt[i]={...nt[i],price:e.target.value};return{...p,tiered:nt};})} type="number" placeholder="가격" style={{...INP,flex:0.7}}/>
+            <button onClick={()=>setPf(p=>{const nt=[...(p.tiered||[])];nt.splice(i,1);return{...p,tiered:nt};})} style={{...BTNS,background:C.danger}}>삭제</button>
+          </div>))}
+          <button onClick={()=>setPf(p=>({...p,tiered:[...(p.tiered||[]),{qty:"",price:""}]}))} style={{...BTNS,marginTop:4}}>+ 계층 추가</button>
+        </div>
+        <div style={{marginBottom:12}}>
+          <label style={{...LBL,marginBottom:6}}>🖼️ 미디어 (이미지/영상)</label>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(80px,1fr))",gap:8,marginBottom:8}}>
+            {(pf.media||[]).map((m,i)=>(<div key={i} style={{position:"relative",aspectRatio:"1/1",background:C.pLight,borderRadius:8,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              {m.url.startsWith("data:")?<div style={{width:"100%",height:"100%",background:m.type==="video"?"#000":"#EEE",display:"flex",alignItems:"center",justifyContent:"center",fontSize:32}}>{m.type==="video"?"🎬":"🖼️"}</div>:<img src={m.url} alt={m.alt||"media"} style={{width:"100%",height:"100%",objectFit:"cover"}}/>}
+              <button onClick={()=>setPf(p=>{const nm=[...(p.media||[])];nm.splice(i,1);return{...p,media:nm};})} style={{position:"absolute",top:2,right:2,background:"#FFF",border:"none",borderRadius:50,width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:12,fontWeight:700}}>✕</button>
+            </div>))}
+            {(pf.media||[]).length<10&&<label style={{aspectRatio:"1/1",background:C.pLight,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:32,border:`2px dashed ${C.border}`}}>
+              ⊕
+              <input type="file" multiple accept="image/*,video/*" onChange={e=>handleFileSelect(e.target.files||[])} style={{display:"none"}}/>
+            </label>}
+          </div>
+          <div style={{fontSize:11,color:C.tLight}}>PNG, JPG, WebP (이미지) 또는 MP4, WebM (영상). 최대 10개</div>
+        </div>
+        <div style={{marginBottom:12}}><label style={{...LBL}}>❌ 비활성화</label><input type="checkbox" checked={pf.active===false} onChange={e=>setPf(p=>({...p,active:!e.target.checked}))} style={{cursor:"pointer"}}/></div>
+        <button onClick={handleSave} disabled={saving} style={{...BTN,width:"100%",opacity:saving?0.6:1,cursor:saving?"not-allowed":"pointer"}}>{saving?"저장중...":"저장"}</button>
       </div>
     </div>
   );
 }
 
-// Admin Component
 export default function Admin() {
-  // Firebase Auth state
-  const [authUser,setAuthUser]=useState(null);
-  const [authChecked,setAuthChecked]=useState(false);
-  const [loginEmail,setLoginEmail]=useState("");
-  const [loginPw,setLoginPw]=useState("");
-  const [loginErr,setLoginErr]=useState("");
-  const [loggingIn,setLoggingIn]=useState(false);
+  const [authed, setAuthed] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
 
-  useEffect(()=>{
-    const unsub=subscribeAuth(u=>{setAuthUser(u);setAuthChecked(true);});
-    return()=>unsub();
-  },[]);
+  useEffect(() => {
+    const unsub = subscribeAuth((user) => {
+      setAuthed(!!user);
+      setAuthLoading(false);
+    });
+    return unsub;
+  }, []);
 
-  const handleLogin=async()=>{
-    if(!loginEmail||!loginPw){setLoginErr("이메일과 비밀번호를 입력하세요");return;}
-    setLoggingIn(true);setLoginErr("");
-    try{
-      await loginAdmin(loginEmail.trim(),loginPw);
-      setLoginPw("");
-    }catch(err){
-      const code=err?.code||"";
-      if(code==="auth/invalid-credential"||code==="auth/wrong-password"||code==="auth/user-not-found"){
-        setLoginErr("이메일 또는 비밀번호가 틀렸습니다");
-      }else if(code==="auth/too-many-requests"){
-        setLoginErr("시도가 너무 많습니다. 잠시 후 다시 시도하세요");
-      }else if(code==="auth/invalid-email"){
-        setLoginErr("올바른 이메일 형식이 아닙니다");
-      }else{
-        setLoginErr("로그인 실패: "+(err?.message||code));
+  const handleLogin = async () => {
+    try {
+      setLoginError("");
+      await loginAdmin(email, password);
+    } catch (err) {
+      setLoginError("이메일 또는 비밀번호가 틀렸습니다");
+    }
+  };
+
+  const handleLogout = async () => {
+    await logoutAdmin();
+  };
+
+  if (authLoading) return (
+    <div style={{fontFamily:"'DM Sans',sans-serif",background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{fontSize:16,color:C.tLight}}>로딩중...</div>
+    </div>
+  );
+
+  if (!authed) return (
+    <div style={{fontFamily:"'DM Sans',sans-serif",background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet"/>
+      <div style={{background:"#FFF",borderRadius:16,padding:32,maxWidth:360,width:"100%",margin:16,boxShadow:"0 4px 24px rgba(0,0,0,.1)",textAlign:"center"}}>
+        <div style={{fontSize:40,marginBottom:12}}>🌿</div>
+        <h2 style={{fontFamily:"'DM Serif Display',serif",fontSize:22,marginBottom:4}}>NOVO MARKET</h2>
+        <div style={{fontSize:12,color:C.tLight,marginBottom:24}}>관리자 로그인</div>
+        <input value={email} onChange={e=>{setEmail(e.target.value);setLoginError("");}}
+          type="email" placeholder="이메일"
+          style={{...INP,textAlign:"center",fontSize:15,marginBottom:8}}/>
+        <input value={password} onChange={e=>{setPassword(e.target.value);setLoginError("");}}
+          onKeyDown={e=>{if(e.key==="Enter")handleLogin();}}
+          type="password" placeholder="비밀번호"
+          style={{...INP,textAlign:"center",fontSize:15,marginBottom:12}}/>
+        {loginError&&<div style={{fontSize:12,color:C.danger,marginBottom:8}}>{loginError}</div>}
+        <button onClick={handleLogin} style={{...BTN,width:"100%",padding:12,fontSize:14}}>로그인</button>
+      </div>
+    </div>
+  );
+
+  return <AdminDashboard handleLogout={handleLogout}/>;
+}
+
+function AdminDashboard({ handleLogout }) {
+  const [tab, setTab] = useState("dashboard");
+  const [loaded, setLoaded] = useState(false);
+  const [products, setProducts] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [categories, setCategories] = useState({});
+  const [promos, setPromos] = useState([]);
+  const [notis, setNotis] = useState([]);
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [editingPromo, setEditingPromo] = useState(null);
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [search, setSearch] = useState("");
+  const [oFilter, setOFilter] = useState("all");
+  const [dragIdx, setDragIdx] = useState(null);
+
+  useEffect(() => {
+    const unsub1 = subscribeProducts(ps => { setProducts(ps); setLoaded(true); });
+    const unsub2 = subscribeOrders(os => setOrders(os));
+    const unsub3 = subscribeCategories(cs => setCategories(cs));
+    const unsub4 = subscribePromos(pms => setPromos(pms));
+    return () => { unsub1(); unsub2(); unsub3(); unsub4(); };
+  }, []);
+
+  const noti = (msg, color = C.success) => {
+    const id = Date.now();
+    setNotis(n => [...n, { id, msg, color }]);
+    setTimeout(() => setNotis(n => n.filter(x => x.id !== id)), 3000);
+  };
+
+  const exportCSV=()=>{
+    const s=orders.filter(o=>o.status==="confirmed"||o.status==="preparing");
+    if(!s.length){noti("배송할 주문이 없습니다");return;}
+    const csv="Order Number,Name,Address,City,State,ZIP,Phone,Items,Total,Delivery,Gate Code\n"+s.map(o=>`${esc(o.orderNum)},"${esc(o.customer?.name)}","${esc(o.customer?.address)}","${esc(o.customer?.city)}",${esc(o.customer?.state)},${esc(o.customer?.zip)},"${esc(o.phone)}","${esc((o.items||[]).map(i=>`${i.name} x${i.qty}`).join("; "))}",${(o.total||0).toFixed(2)},${esc(o.deliveryMethod||"delivery")},${esc(o.customer?.gateCode||"")}`).join("\n");
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+    a.download=`novo_shipping_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    noti(`${s.length}건 CSV 다운로드`);
+  };
+
+  const handleTrackingCSV=async(file)=>{
+    if(!file)return;
+    const text=await file.text();
+    const lines=text.split("\n").map(l=>l.split(",").map(c=>c.trim().replace(/^"|"$/g,"")));
+    if(lines.length<2){noti("CSV 데이터 없음");return;}
+    const headers=lines[0].map(h=>h.toLowerCase());
+    const orderIdx=headers.findIndex(h=>h.includes("order"));
+    const trackIdx=headers.findIndex(h=>h.includes("track"));
+    if(orderIdx===-1||trackIdx===-1){noti("Order Number 또는 Tracking Number 컬럼을 찾을 수 없습니다");return;}
+    let matched=0;
+    for(let i=1;i<lines.length;i++){
+      const row=lines[i];
+      if(!row||row.length<=Math.max(orderIdx,trackIdx))continue;
+      const orderNum=row[orderIdx]?.trim();
+      const tracking=row[trackIdx]?.trim();
+      if(!orderNum||!tracking)continue;
+      const found=orders.find(o=>o.orderNum===orderNum);
+      if(found&&found._docId){
+        try{
+          await updateOrderField(found._docId,{trackingNum:tracking,status:"shipped"});
+          matched++;
+        }catch(e){console.error(e);}
       }
     }
-    setLoggingIn(false);
+    noti(`${matched}건 트래킹 업데이트 완료`);
   };
 
-  const handleLogout=async()=>{try{await logoutAdmin();}catch(e){console.error(e);}};
-
-  const authed=!!authUser;
-
-  const [tab,setTab]=useState("dashboard");const [products,setProducts]=useState([]);const [orders,setOrders]=useState([]);const [promos,setPromos]=useState([]);const [categories,setCategories]=useState({});const [loaded,setLoaded]=useState(false);
-  const [showPF,setShowPF]=useState(false);const [editPid,setEditPid]=useState(null);const [pfInitial,setPfInitial]=useState(null);
-  const [showPrF,setShowPrF]=useState(false);const [editPrCode,setEditPrCode]=useState(null);const [showCatF,setShowCatF]=useState(false);const [catForm,setCatForm]=useState({id:"",nameKo:"",nameEn:""});const [editCatId,setEditCatId]=useState(null);
-  const [oFilter,setOFilter]=useState("all");const [search,setSearch]=useState("");const [notif,setNotif]=useState("");const [prf,setPrf]=useState({code:"",type:"percent",value:0,minOrder:0,active:true});
-  const trackingTimers=useRef({});const stockTimers=useRef({});
-
-  // Drag-and-drop state for reordering products
-  const [dragIdx,setDragIdx]=useState(null);
-  const [dragOverIdx,setDragOverIdx]=useState(null);
-  const [reordering,setReordering]=useState(false);
-
-  // Products sorted by `order` field (new products without `order` go to the bottom)
-  const sortedProducts=useMemo(()=>[...products].sort((a,b)=>{
-    const ao=typeof a.order==="number"?a.order:9999;
-    const bo=typeof b.order==="number"?b.order:9999;
-    if(ao!==bo)return ao-bo;
-    return(a.nameKo||"").localeCompare(b.nameKo||"");
-  }),[products]);
-
-  // Drag handlers — list is the currently visible array (sortedProducts or filtered)
-  const handleDragStart=(idx)=>{setDragIdx(idx);};
-  const handleDragOver=(e,idx)=>{e.preventDefault();e.dataTransfer.dropEffect="move";if(idx!==dragOverIdx)setDragOverIdx(idx);};
-  const handleDragLeave=()=>{setDragOverIdx(null);};
-  const handleDragEnd=()=>{setDragIdx(null);setDragOverIdx(null);};
-  const handleDrop=async(e,targetIdx,list)=>{
-    e.preventDefault();
-    const from=dragIdx;
-    setDragIdx(null);setDragOverIdx(null);
-    if(from===null||from===targetIdx)return;
-    const next=[...list];
-    const [moved]=next.splice(from,1);
-    next.splice(targetIdx,0,moved);
-    setReordering(true);
-    try{
-      await reorderProducts(next.map(p=>p.id));
-      noti("순서 저장됨");
-    }catch(err){
-      console.error(err);
-      noti("순서 저장 실패");
-    }
-    setReordering(false);
+  const handleRevertStatus = async (o) => {
+    const prev = PREV_STATUS[o.status];
+    if (!prev) return;
+    await updateOrderStatus(o._docId, prev);
+    noti(`${o.orderNum} → ${STATUS[prev]?.label}`);
   };
 
+  if (!loaded) return <div style={{fontFamily:"'DM Sans',sans-serif",padding:40,textAlign:"center",color:C.tLight}}>로딩중...</div>;
 
-  useEffect(()=>{
-    if(!authed)return;
-    const unsubs=[];
-    unsubs.push(subscribeProducts(prods=>{setProducts(prods);setLoaded(true);}));
-    unsubs.push(subscribeOrders(ords=>{setOrders(ords);}));
-    unsubs.push(subscribePromos(prs=>{setPromos(prs);}));
-    unsubs.push(subscribeCategories(cats=>{const m={};Object.entries(cats).forEach(([id,d])=>{m[id]=d.nameKo||d;});setCategories(m);}));
-    return()=>unsubs.forEach(u=>u());
-  },[authed]);
+  // DASHBOARD TAB
+  if (tab === "dashboard") {
+    const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+    const todayOrders = orders.filter(o => new Date(o.createdAt?.toDate?.() || o.createdAt || 0) >= todayStart);
+    const todayRevenue = todayOrders.reduce((s,o) => s + (o.total||0), 0);
+    const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - 7); weekStart.setHours(0,0,0,0);
+    const weekOrders = orders.filter(o => new Date(o.createdAt?.toDate?.() || o.createdAt || 0) >= weekStart);
+    const weekRevenue = weekOrders.reduce((s,o) => s + (o.total||0), 0);
+    const totalRevenue = orders.reduce((s,o) => s + (o.total||0), 0);
+    const pendingOrders = orders.filter(o => o.status === "pending_payment").length;
+    const lowStock = products.filter(p => p.stock > 0 && p.stock <= 10).length;
+    const outOfStock = products.filter(p => p.stock === 0).length;
+    const activeOrders = orders.filter(o => !["delivered","cancelled"].includes(o.status)).length;
 
-  const noti=m=>{setNotif(m);setTimeout(()=>setNotif(""),3000);};
-  const stats=useMemo(()=>({today:orders.filter(o=>{const d=o.createdAt?.toDate?o.createdAt.toDate():o.createdAt?new Date(o.createdAt):null;return d&&d.toISOString().slice(0,10)===new Date().toISOString().slice(0,10);}).length,revenue:orders.filter(o=>o.status!=="pending_payment"&&o.status!=="cancelled").reduce((s,o)=>s+(o.total||0),0),pending:orders.filter(o=>o.status==="pending_payment"||o.status==="payment_submitted").length,lowStock:products.filter(p=>p.stock>0&&p.stock<=5).length,oos:products.filter(p=>p.stock===0).length,total:orders.length}),[orders,products]);
-  const fOrders=useMemo(()=>orders.filter(o=>(oFilter==="all"||o.status===oFilter)&&(!search||(o.orderNum||"").toLowerCase().includes(search.toLowerCase())||(o.customer?.name||"").toLowerCase().includes(search.toLowerCase())||(o.phone||"").includes(search))).sort((a,b)=>{const da=a.createdAt?.toDate?a.createdAt.toDate():a.createdAt?new Date(a.createdAt):new Date(0);const db2=b.createdAt?.toDate?b.createdAt.toDate():b.createdAt?new Date(b.createdAt):new Date(0);return db2-da;}),[orders,oFilter,search]);
-
-  const exportCSV=()=>{const s=orders.filter(o=>o.status==="confirmed"||o.status==="preparing");if(!s.length){noti("배송할 주문이 없습니다");return;}const esc=v=>{const str=String(v==null?"":v).replace(/"/g,'""');return /^[=+\-@\t\r]/.test(str)?`"'${str}"`:`"${str}"`;};const csv="Order Number,Name,Address,City,State,ZIP,Phone,Items,Total\n"+s.map(o=>[esc(o.orderNum),esc(o.customer?.name),esc(o.customer?.address),esc(o.customer?.city),esc(o.customer?.state),esc(o.customer?.zip),esc(o.phone),esc((o.items||[]).map(i=>`${i.name} x${i.qty}`).join("; ")),esc((o.total||0).toFixed(2))].join(",")).join("\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"}));a.download=`novo_shipping_${new Date().toISOString().slice(0,10)}.csv`;a.click();noti(`${s.length}건 CSV 다운로드`);};
-  const handleDeleteProduct=async id=>{try{await deleteProduct(id);noti("제품 삭제 완료");}catch{noti("삭제 실패");}};
-  const handleOrderStatus=async(docId,status,label)=>{try{await updateOrderStatus(docId,status);noti(`→ ${label}`);}catch{noti("상태 변경 실패");}};
-  // Revert order to previous status (with confirmation)
-  const PREV_STATUS={payment_submitted:"pending_payment",confirmed:"payment_submitted",preparing:"confirmed",shipped:"preparing",delivered:"shipped",cancelled:"pending_payment"};
-  const handleRevertStatus=async(o)=>{const prev=PREV_STATUS[o.status];if(!prev){noti("되돌릴 수 없는 상태입니다");return;}if(!window.confirm(`${o.orderNum}\n\n"${STATUS[o.status]?.label}" → "${STATUS[prev]?.label}"\n\n되돌리시겠습니까?`))return;try{await updateOrderStatus(o._docId,prev);noti(`↶ ${o.orderNum} → ${STATUS[prev]?.label}`);}catch{noti("되돌리기 실패");}};
-  const handleTrackingUpdate=(docId,val)=>{setOrders(prev=>prev.map(o=>o._docId===docId?{...o,trackingNum:val}:o));if(trackingTimers.current[docId])clearTimeout(trackingTimers.current[docId]);trackingTimers.current[docId]=setTimeout(async()=>{try{await updateOrderField(docId,{trackingNum:val});}catch{}},800);};
-  const handleStockChange=(pid,val)=>{const s=Math.max(0,val);setProducts(prev=>prev.map(p=>p.id===pid?{...p,stock:s}:p));if(stockTimers.current[pid])clearTimeout(stockTimers.current[pid]);stockTimers.current[pid]=setTimeout(async()=>{try{await updateProduct(pid,{stock:s});}catch{}},500);};
-  const handleSavePromo=async()=>{if(!prf.code){noti("코드 입력");return;}try{if(editPrCode)await updatePromo(prf.code,{...prf});else await addPromo({...prf});noti(editPrCode?"수정 완료":"추가 완료");setShowPrF(false);}catch{noti("저장 실패");}};
-  const handleDeletePromo=async code=>{try{await deletePromo(code);noti("삭제 완료");}catch{noti("삭제 실패");}};
-  const handleSaveCategory=async()=>{if(!catForm.id||!catForm.nameKo){noti("ID와 이름을 입력하세요");return;}if(!editCatId&&categories[catForm.id]){noti("이미 존재하는 ID입니다");return;}try{await saveCategory(catForm.id,{nameKo:catForm.nameKo,nameEn:catForm.nameEn||catForm.id});noti(editCatId?"카테고리 수정 완료":"카테고리 추가 완료");setShowCatF(false);}catch{noti("저장 실패");}};
-  const handleDeleteCategory=async id=>{if(products.some(p=>p.category===id)){noti("해당 카테고리에 제품이 있어 삭제 불가");return;}try{await deleteCategory(id);noti("카테고리 삭제 완료");}catch{noti("삭제 실패");}};
-  const getOrderDate=o=>{if(o.createdAt?.toDate)return o.createdAt.toDate().toLocaleDateString("ko-KR");if(o.createdAt)return new Date(o.createdAt).toLocaleDateString("ko-KR");return"";};
-  const openProductForm=product=>{const init=product?{...product}:{id:`p${Date.now()}`,category:Object.keys(categories)[0]||"babyfood",brand:"",nameEn:"",nameKo:"",price:0,stock:0,image:"📦",sale:false,salePrice:0,active:true,media:[],tiered:[],descKo:"",descEn:"",tags:[]};setPfInitial(init);setEditPid(product?product.id:null);setShowPF(true);};
-  const handleProductDone=message=>{setShowPF(false);noti(message);};
-
-  // Auth check loading
-  if(!authChecked){
     return (
-      <div style={{fontFamily:"'DM Sans',sans-serif",background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <div style={{textAlign:"center",color:C.tLight}}><div style={{fontSize:40,marginBottom:12}}>⏳</div><div>인증 확인 중...</div></div>
-      </div>
-    );
-  }
-
-  // Login gate — block all rendering until authenticated via Firebase Auth
-  if(!authed){
-    return (
-      <div style={{fontFamily:"'DM Sans',sans-serif",background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-        <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet"/>
-        <div style={{background:"#FFF",borderRadius:16,padding:32,maxWidth:380,width:"100%",boxShadow:"0 4px 20px rgba(0,0,0,.08)",border:`1px solid ${C.border}`}}>
-          <div style={{textAlign:"center",marginBottom:24}}>
-            <div style={{fontSize:32,marginBottom:8}}>🔒</div>
-            <h2 style={{fontFamily:"'DM Serif Display',serif",fontSize:22,margin:0,color:C.primary}}>NOVO MARKET</h2>
-            <div style={{fontSize:12,color:C.tLight,marginTop:4}}>Admin Login</div>
+      <div style={{fontFamily:"'DM Sans',sans-serif",background:C.bg,minHeight:"100vh",padding:20}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24,flexWrap:"wrap",gap:20}}>
+          <div>
+            <h1 style={{fontFamily:"'DM Serif Display',serif",fontSize:28,margin:0}}>🌿 NOVO MARKET</h1>
+            <div style={{fontSize:12,color:C.tLight,marginTop:4}}>관리자 대시보드</div>
           </div>
-          <div style={{marginBottom:12}}>
-            <label style={LBL}>이메일</label>
-            <input type="email" value={loginEmail} onChange={e=>{setLoginEmail(e.target.value);setLoginErr("");}} onKeyDown={e=>{if(e.key==="Enter")handleLogin();}} autoFocus autoComplete="email" placeholder="admin@novomarket.us" style={INP}/>
+          <button onClick={handleLogout} style={{...BTN,background:C.danger}}>로그아웃</button>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:16,marginBottom:32}}>
+          <div style={{background:"#FFF",borderRadius:12,padding:20,boxShadow:"0 2px 8px rgba(0,0,0,0.05)"}}>
+            <div style={{fontSize:12,color:C.tLight,marginBottom:6}}>오늘 주문</div>
+            <div style={{fontSize:28,fontWeight:700,color:C.primary}}>{todayOrders.length}</div>
           </div>
-          <div style={{marginBottom:12}}>
-            <label style={LBL}>비밀번호</label>
-            <input type="password" value={loginPw} onChange={e=>{setLoginPw(e.target.value);setLoginErr("");}} onKeyDown={e=>{if(e.key==="Enter")handleLogin();}} autoComplete="current-password" style={INP}/>
+          <div style={{background:"#FFF",borderRadius:12,padding:20,boxShadow:"0 2px 8px rgba(0,0,0,0.05)"}}>
+            <div style={{fontSize:12,color:C.tLight,marginBottom:6}}>오늘 매출</div>
+            <div style={{fontSize:28,fontWeight:700,color:C.primary}}>${todayRevenue.toFixed(2)}</div>
           </div>
-          {loginErr&&<div style={{background:C.dLight,color:C.danger,padding:"8px 12px",borderRadius:8,fontSize:12,marginBottom:12}}>{loginErr}</div>}
-          <button onClick={handleLogin} disabled={loggingIn} style={{...BTN,width:"100%",opacity:loggingIn?0.6:1}}>{loggingIn?"로그인 중...":"로그인"}</button>
+          <div style={{background:"#FFF",borderRadius:12,padding:20,boxShadow:"0 2px 8px rgba(0,0,0,0.05)"}}>
+            <div style={{fontSize:12,color:C.tLight,marginBottom:6}}>주간 매출</div>
+            <div style={{fontSize:28,fontWeight:700,color:C.primary}}>${weekRevenue.toFixed(2)}</div>
+          </div>
+          <div style={{background:"#FFF",borderRadius:12,padding:20,boxShadow:"0 2px 8px rgba(0,0,0,0.05)"}}>
+            <div style={{fontSize:12,color:C.tLight,marginBottom:6}}>총 매출</div>
+            <div style={{fontSize:28,fontWeight:700,color:C.primary}}>${totalRevenue.toFixed(2)}</div>
+          </div>
+          <div style={{background:"#FFF",borderRadius:12,padding:20,boxShadow:"0 2px 8px rgba(0,0,0,0.05)"}}>
+            <div style={{fontSize:12,color:C.tLight,marginBottom:6}}>결제 대기</div>
+            <div style={{fontSize:28,fontWeight:700,color:C.warn}}>{pendingOrders}</div>
+          </div>
+          <div style={{background:"#FFF",borderRadius:12,padding:20,boxShadow:"0 2px 8px rgba(0,0,0,0.05)"}}>
+            <div style={{fontSize:12,color:C.tLight,marginBottom:6}}>낮은 재고</div>
+            <div style={{fontSize:28,fontWeight:700,color:C.accent}}>{lowStock}</div>
+          </div>
+          <div style={{background:"#FFF",borderRadius:12,padding:20,boxShadow:"0 2px 8px rgba(0,0,0,0.05)"}}>
+            <div style={{fontSize:12,color:C.tLight,marginBottom:6}}>품절</div>
+            <div style={{fontSize:28,fontWeight:700,color:C.danger}}>{outOfStock}</div>
+          </div>
+          <div style={{background:"#FFF",borderRadius:12,padding:20,boxShadow:"0 2px 8px rgba(0,0,0,0.05)"}}>
+            <div style={{fontSize:12,color:C.tLight,marginBottom:6}}>진행 중인 주문</div>
+            <div style={{fontSize:28,fontWeight:700,color:C.primary}}>{activeOrders}</div>
+          </div>
         </div>
       </div>
     );
   }
 
+  // ORDERS TAB
+  if (tab === "orders") {
+    const filtered = orders
+      .filter(o => oFilter === "all" || o.status === oFilter)
+      .filter(o => !search || o.orderNum?.includes(search) || o.customer?.name?.includes(search) || o.phone?.includes(search));
+
+    return (
+      <div style={{fontFamily:"'DM Sans',sans-serif",background:C.bg,minHeight:"100vh",padding:20}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
+          <h2 style={{fontFamily:"'DM Serif Display',serif",fontSize:24,margin:0}}>📦 주문 관리</h2>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            <button onClick={exportCSV} style={BTN}>📄 배송 CSV</button>
+            <label style={{...BTN,background:"#8E44AD",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:4}}>
+              📥 트래킹 CSV 업로드
+              <input type="file" accept=".csv,.xlsx,.xls" style={{display:"none"}} onChange={e=>{handleTrackingCSV(e.target.files[0]);e.target.value="";}}/>
+            </label>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="주문번호, 이름, 전화번호 검색..." style={{...INP,maxWidth:280}}/>
+          <select value={oFilter} onChange={e=>setOFilter(e.target.value)} style={{...INP,maxWidth:160}}>
+            <option value="all">전체 상태</option>
+            {Object.entries(STATUS).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+          </select>
+        </div>
+        <div style={{background:"#FFF",borderRadius:12,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.05)"}}>
+          {filtered.length === 0 ? (
+            <div style={{padding:40,textAlign:"center",color:C.tLight}}>주문이 없습니다</div>
+          ) : (
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse"}}>
+                <thead>
+                  <tr style={{background:C.pLight,borderBottom:`1px solid ${C.border}`}}>
+                    <th style={{padding:12,textAlign:"left",fontSize:12,fontWeight:700,color:C.text}}>주문번호</th>
+                    <th style={{padding:12,textAlign:"left",fontSize:12,fontWeight:700,color:C.text}}>고객</th>
+                    <th style={{padding:12,textAlign:"left",fontSize:12,fontWeight:700,color:C.text}}>전화</th>
+                    <th style={{padding:12,textAlign:"left",fontSize:12,fontWeight:700,color:C.text}}>금액</th>
+                    <th style={{padding:12,textAlign:"left",fontSize:12,fontWeight:700,color:C.text}}>상태</th>
+                    <th style={{padding:12,textAlign:"left",fontSize:12,fontWeight:700,color:C.text}}>작업</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((o,i) => (
+                    <tr key={o._docId} style={{borderBottom:`1px solid ${C.border}`}}>
+                      <td style={{padding:12,fontSize:13,fontWeight:600,color:C.text}}>{o.orderNum}</td>
+                      <td style={{padding:12,fontSize:13,color:C.text}}>{o.customer?.name}</td>
+                      <td style={{padding:12,fontSize:13,color:C.tLight}}>{o.phone}</td>
+                      <td style={{padding:12,fontSize:13,fontWeight:600,color:C.text}}>${(o.total||0).toFixed(2)}</td>
+                      <td style={{padding:12,fontSize:12}}>
+                        <span style={{background:STATUS[o.status]?.bg,color:STATUS[o.status]?.color,padding:"4px 8px",borderRadius:4,fontWeight:600}}>
+                          {STATUS[o.status]?.label}
+                        </span>
+                      </td>
+                      <td style={{padding:12,display:"flex",gap:4}}>
+                        <button onClick={() => { const newStatus = Object.keys(STATUS).find((k,idx) => Object.keys(STATUS)[idx-1] === o.status) || "confirmed"; if (newStatus) updateOrderStatus(o._docId, newStatus); }} style={{...BTNS,background:C.primary}}>→</button>
+                        {PREV_STATUS[o.status] && <button onClick={() => handleRevertStatus(o)} style={{...BTNS,background:C.warn}}>⟲</button>}
+                        {o.trackingNum && <span style={{fontSize:11,color:C.tLight,padding:"6px 8px"}}>TRK: {o.trackingNum}</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // INVENTORY TAB
+  if (tab === "inventory") {
+    const inv = products.map(p => ({
+      id: p.id,
+      name: p.nameKo || p.nameEn,
+      category: categories[p.category]?.name || p.category || "—",
+      stock: p.stock || 0,
+      price: p.price || 0,
+      status: (p.stock || 0) === 0 ? "품절" : (p.stock || 0) <= 10 ? "낮음" : "정상",
+    })).sort((a,b) => {
+      const order = { "품절": 0, "낮음": 1, "정상": 2 };
+      return order[a.status] - order[b.status];
+    });
+
+    return (
+      <div style={{fontFamily:"'DM Sans',sans-serif",background:C.bg,minHeight:"100vh",padding:20}}>
+        <h2 style={{fontFamily:"'DM Serif Display',serif",fontSize:24,margin:"0 0 20px 0"}}>📋 재고 관리</h2>
+        <div style={{background:"#FFF",borderRadius:12,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.05)"}}>
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse"}}>
+              <thead>
+                <tr style={{background:C.pLight,borderBottom:`1px solid ${C.border}`}}>
+                  <th style={{padding:12,textAlign:"left",fontSize:12,fontWeight:700,color:C.text}}>제품명</th>
+                  <th style={{padding:12,textAlign:"left",fontSize:12,fontWeight:700,color:C.text}}>카테고리</th>
+                  <th style={{padding:12,textAlign:"left",fontSize:12,fontWeight:700,color:C.text}}>가격</th>
+                  <th style={{padding:12,textAlign:"left",fontSize:12,fontWeight:700,color:C.text}}>재고</th>
+                  <th style={{padding:12,textAlign:"left",fontSize:12,fontWeight:700,color:C.text}}>상태</th>
+                </tr>
+              </thead>
+              <tbody>
+                {inv.map(item => (
+                  <tr key={item.id} style={{borderBottom:`1px solid ${C.border}`}}>
+                    <td style={{padding:12,fontSize:13,fontWeight:600,color:C.text}}>{item.name}</td>
+                    <td style={{padding:12,fontSize:13,color:C.tLight}}>{item.category}</td>
+                    <td style={{padding:12,fontSize:13,color:C.text}}>${item.price.toFixed(2)}</td>
+                    <td style={{padding:12,fontSize:13,fontWeight:600,color:C.text}}>{item.stock}</td>
+                    <td style={{padding:12,fontSize:12}}>
+                      <span style={{background: item.status === "품절" ? C.dLight : item.status === "낮음" ? C.wLight : C.pLight, color: item.status === "품절" ? C.danger : item.status === "낮음" ? C.warn : C.success, padding:"4px 8px",borderRadius:4,fontWeight:600}}>
+                        {item.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // PRODUCTS TAB
+  if (tab === "products") {
+    const sortedProducts = [...products].sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+
+    return (
+      <div style={{fontFamily:"'DM Sans',sans-serif",background:C.bg,minHeight:"100vh",padding:20}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+          <h2 style={{fontFamily:"'DM Serif Display',serif",fontSize:24,margin:0}}>🏷️ 제품 관리</h2>
+          <button onClick={()=>setEditingProduct({})} style={{...BTN}}>+ 새 제품</button>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(250px,1fr))",gap:16}}>
+          {sortedProducts.map((p,i) => (
+            <div
+              key={p.id}
+              draggable
+              onDragStart={() => setDragIdx(i)}
+              onDragOver={(e) => { e.preventDefault(); }}
+              onDrop={async () => {
+                if (dragIdx === null || dragIdx === i) return;
+                const reordered = [...sortedProducts];
+                const [moved] = reordered.splice(dragIdx, 1);
+                reordered.splice(i, 0, moved);
+                await reorderProducts(reordered.map(p => p.id));
+                setDragIdx(null);
+                noti("순서 변경 완료");
+              }}
+              onDragEnd={() => setDragIdx(null)}
+              style={{background:"#FFF",borderRadius:12,padding:16,boxShadow:"0 2px 8px rgba(0,0,0,0.05)",cursor:"grab",opacity:dragIdx===i?0.7:1,transition:"opacity 0.2s"}}
+            >
+              <div style={{fontSize:24,marginBottom:8,textAlign:"center"}}>
+                {p.media?.[0]?.url ? <img src={p.media[0].url} alt={p.nameKo} style={{width:"100%",height:120,objectFit:"cover",borderRadius:8,marginBottom:8}} /> : p.image}
+              </div>
+              <div style={{fontSize:12,color:C.tLight,marginBottom:2}}>☰ 드래그로 순서 변경</div>
+              <h4 style={{margin:"8px 0 4px 0",fontSize:14,fontWeight:700,color:C.text}}>{p.nameKo}</h4>
+              <div style={{fontSize:12,color:C.tLight,marginBottom:8}}>{p.nameEn}</div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                <span style={{fontSize:13,fontWeight:700,color:C.primary}}>${p.price?.toFixed(2) || "0.00"}</span>
+                <span style={{fontSize:12,color:C.tLight}}>재고: {p.stock}</span>
+              </div>
+              <div style={{display:"flex",gap:6}}>
+                <button onClick={()=>setEditingProduct(p)} style={{...BTNS,flex:1}}>수정</button>
+                <button onClick={async()=>{await deleteProduct(p.id);noti("삭제 완료");}} style={{...BTNS,background:C.danger,flex:1}}>삭제</button>
+              </div>
+            </div>
+          ))}
+        </div>
+        {editingProduct && (
+          <ProductFormModal
+            initialData={editingProduct || {}}
+            initialCategories={categories}
+            editPid={editingProduct?.id}
+            onDone={(msg) => { setEditingProduct(null); noti(msg); }}
+            onClose={() => setEditingProduct(null)}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // CATEGORIES TAB
+  if (tab === "categories") {
+    const catList = Object.entries(categories).map(([k,v]) => ({id:k,...v}));
+
+    return (
+      <div style={{fontFamily:"'DM Sans',sans-serif",background:C.bg,minHeight:"100vh",padding:20}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+          <h2 style={{fontFamily:"'DM Serif Display',serif",fontSize:24,margin:0}}>📂 카테고리</h2>
+          <button onClick={()=>setEditingCategory({})} style={{...BTN}}>+ 새 카테고리</button>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(250px,1fr))",gap:16}}>
+          {catList.map(c => (
+            <div key={c.id} style={{background:"#FFF",borderRadius:12,padding:16,boxShadow:"0 2px 8px rgba(0,0,0,0.05)"}}>
+              <h4 style={{margin:0,fontSize:16,fontWeight:700,color:C.text,marginBottom:12}}>{c.name}</h4>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>setEditingCategory(c)} style={{...BTNS,flex:1}}>수정</button>
+                <button onClick={async()=>{await deleteCategory(c.id);noti("삭제 완료");}} style={{...BTNS,background:C.danger,flex:1}}>삭제</button>
+              </div>
+            </div>
+          ))}
+        </div>
+        {editingCategory && (
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+            <div style={{background:"#FFF",borderRadius:16,maxWidth:400,width:"100%",padding:24}}>
+              <h3 style={{margin:"0 0 20px 0",fontSize:18,fontWeight:700}}>{editingCategory?.id?"카테고리 수정":"새 카테고리"}</h3>
+              <input
+                value={editingCategory?.id || ""}
+                onChange={e=>setEditingCategory(c=>({...c,id:e.target.value}))}
+                placeholder="카테고리 ID"
+                disabled={!!editingCategory?.id}
+                style={{...INP,marginBottom:12}}
+              />
+              <input
+                value={editingCategory?.name || ""}
+                onChange={e=>setEditingCategory(c=>({...c,name:e.target.value}))}
+                placeholder="카테고리명"
+                style={{...INP,marginBottom:20}}
+              />
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={async()=>{await saveCategory(editingCategory.id,{name:editingCategory.name});setEditingCategory(null);noti("저장 완료");}} style={{...BTN,flex:1}}>저장</button>
+                <button onClick={()=>setEditingCategory(null)} style={{...BTN,background:C.tLight,flex:1}}>취소</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // PROMOS TAB
+  if (tab === "promos") {
+    return (
+      <div style={{fontFamily:"'DM Sans',sans-serif",background:C.bg,minHeight:"100vh",padding:20}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+          <h2 style={{fontFamily:"'DM Serif Display',serif",fontSize:24,margin:0}}>🎟️ 프로모션</h2>
+          <button onClick={()=>setEditingPromo({})} style={{...BTN}}>+ 새 프로모</button>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:16}}>
+          {promos.map(p => (
+            <div key={p._docId} style={{background:"#FFF",borderRadius:12,padding:16,boxShadow:"0 2px 8px rgba(0,0,0,0.05)"}}>
+              <h4 style={{margin:"0 0 4px 0",fontSize:16,fontWeight:700,color:C.text}}>{p.code}</h4>
+              <div style={{fontSize:12,color:C.tLight,marginBottom:12}}>
+                <div>{p.desc}</div>
+                <div style={{marginTop:4}}>
+                  {p.type === "percent" ? `${p.value}% 할인` : `$${p.value} 할인`}
+                  {p.maxUses && ` (최대 ${p.maxUses}회)`}
+                </div>
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>setEditingPromo(p)} style={{...BTNS,flex:1}}>수정</button>
+                <button onClick={async()=>{await deletePromo(p.code);noti("삭제 완료");}} style={{...BTNS,background:C.danger,flex:1}}>삭제</button>
+              </div>
+            </div>
+          ))}
+        </div>
+        {editingPromo && (
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+            <div style={{background:"#FFF",borderRadius:16,maxWidth:400,width:"100%",maxHeight:"80vh",overflow:"auto",padding:24}}>
+              <h3 style={{margin:"0 0 20px 0",fontSize:18,fontWeight:700}}>{editingPromo?.code?"프로모 수정":"새 프로모"}</h3>
+              <input
+                value={editingPromo?.code || ""}
+                onChange={e=>setEditingPromo(p=>({...p,code:e.target.value}))}
+                placeholder="프로모 코드"
+                disabled={!!editingPromo?.code}
+                style={{...INP,marginBottom:12,textTransform:"uppercase"}}
+              />
+              <input
+                value={editingPromo?.desc || ""}
+                onChange={e=>setEditingPromo(p=>({...p,desc:e.target.value}))}
+                placeholder="설명"
+                style={{...INP,marginBottom:12}}
+              />
+              <select value={editingPromo?.type || "percent"} onChange={e=>setEditingPromo(p=>({...p,type:e.target.value}))} style={{...INP,marginBottom:12}}>
+                <option value="percent">퍼센트 할인 (%)</option>
+                <option value="amount">금액 할인 ($)</option>
+              </select>
+              <input
+                value={editingPromo?.value || ""}
+                onChange={e=>setEditingPromo(p=>({...p,value:e.target.value}))}
+                placeholder="할인값"
+                type="number"
+                style={{...INP,marginBottom:12}}
+              />
+              <input
+                value={editingPromo?.maxUses || ""}
+                onChange={e=>setEditingPromo(p=>({...p,maxUses:e.target.value}))}
+                placeholder="최대 사용 횟수 (선택)"
+                type="number"
+                style={{...INP,marginBottom:20}}
+              />
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={async()=>{const pData={code:editingPromo.code,desc:editingPromo.desc,type:editingPromo.type,value:Number(editingPromo.value),maxUses:editingPromo.maxUses?Number(editingPromo.maxUses):null};if(editingPromo._docId){await updatePromo(editingPromo.code,pData);}else{await addPromo(pData);}setEditingPromo(null);noti("저장 완료");}} style={{...BTN,flex:1}}>저장</button>
+                <button onClick={()=>setEditingPromo(null)} style={{...BTN,background:C.tLight,flex:1}}>취소</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // DEFAULT
   return (
-    <div style={{fontFamily:"'DM Sans',sans-serif",background:C.bg,minHeight:"100vh"}}>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet"/>
-      <style>{`@keyframes si{from{transform:translateX(100px);opacity:0}to{transform:translateX(0);opacity:1}}input:focus,select:focus,textarea:focus{border-color:#2D5A3D!important}`}</style>
-      {notif&&<div style={{position:"fixed",top:16,right:16,background:C.primary,color:"#FFF",padding:"12px 20px",borderRadius:10,fontSize:13,fontWeight:600,zIndex:2000,boxShadow:"0 4px 20px rgba(0,0,0,.2)",animation:"si .3s ease"}}>✓ {notif}</div>}
-      <div style={{background:"#1B2A3D",padding:"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between"}}><div style={{display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:20}}>🌿</span><span style={{fontFamily:"'DM Serif Display',serif",color:"#FFF",fontSize:18}}>NOVO MARKET</span><span style={{color:"rgba(255,255,255,.5)",fontSize:12}}>Admin</span></div><div style={{display:"flex",alignItems:"center",gap:10}}>{stats.pending>0&&<span style={{background:C.warn,color:"#FFF",borderRadius:12,padding:"4px 10px",fontSize:11,fontWeight:700}}>⚠ {stats.pending} pending</span>}<button onClick={handleLogout} style={{background:"transparent",border:"1px solid rgba(255,255,255,.3)",color:"#FFF",borderRadius:6,padding:"4px 10px",fontSize:11,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>🚪 로그아웃</button></div></div>
-      <div style={{background:"#FFF",borderBottom:`1px solid ${C.border}`,display:"flex",overflowX:"auto",padding:"0 12px"}}>{TABS.map(t=><button key={t.k} onClick={()=>setTab(t.k)} style={{padding:"14px 16px",border:"none",background:"none",cursor:"pointer",fontSize:13,fontWeight:tab===t.k?700:500,color:tab===t.k?C.primary:C.tLight,borderBottom:tab===t.k?`3px solid ${C.primary}`:"3px solid transparent",fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap"}}>{t.i} {t.l}</button>)}</div>
-      <div style={{padding:20,maxWidth:1100,margin:"0 auto"}}>
-        {!loaded&&<div style={{textAlign:"center",padding:"60px 0",color:C.tLight}}><div style={{fontSize:40,marginBottom:12}}>⏳</div><div>Firebase 데이터 로딩 중...</div></div>}
-
-        {loaded&&tab==="dashboard"&&<div><h2 style={{fontFamily:"'DM Serif Display',serif",fontSize:24,marginBottom:20}}>📊 대시보드</h2><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:14,marginBottom:24}}>{[{l:"오늘 주문",v:stats.today,i:"📦",cl:C.primary},{l:"총 매출",v:`$${stats.revenue.toFixed(0)}`,i:"💰",cl:C.accent},{l:"처리 대기",v:stats.pending,i:"⏳",cl:C.warn},{l:"재고 부족",v:stats.lowStock,i:"⚠️",cl:C.danger},{l:"품절",v:stats.oos,i:"🚫",cl:"#666"},{l:"총 주문",v:stats.total,i:"📋",cl:"#2980B9"}].map((s,i)=><div key={i} style={{background:"#FFF",borderRadius:14,padding:18,border:`1px solid ${C.border}`,position:"relative"}}><div style={{position:"absolute",top:12,right:14,fontSize:28,opacity:0.15}}>{s.i}</div><div style={{fontSize:11,color:C.tLight,fontWeight:600,marginBottom:6,textTransform:"uppercase",letterSpacing:0.5}}>{s.l}</div><div style={{fontSize:28,fontWeight:700,color:s.cl}}>{s.v}</div></div>)}</div><div style={{background:"#FFF",borderRadius:14,padding:20,border:`1px solid ${C.border}`}}><h3 style={{fontSize:15,fontWeight:700,marginBottom:14}}>최근 주문</h3>{orders.slice(0,5).map(o=><div key={o._docId||o.orderNum} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:`1px solid ${C.border}`}}><div><span style={{fontWeight:700,color:C.primary,marginRight:10}}>{o.orderNum}</span><span style={{fontSize:13}}>{o.customer?.name}</span></div><div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontWeight:700,fontSize:14}}>${(o.total||0).toFixed(2)}</span><span style={{fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:6,background:STATUS[o.status]?.bg,color:STATUS[o.status]?.color}}>{STATUS[o.status]?.label}</span></div></div>)}</div></div>}
-
-        {loaded&&tab==="orders"&&<div><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}><h2 style={{fontFamily:"'DM Serif Display',serif",fontSize:24,margin:0}}>📦 주문 관리</h2><button onClick={exportCSV} style={BTN}>📄 배송 CSV 다운로드</button></div><div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="주문번호, 이름, 전화번호 검색..." style={{...INP,maxWidth:280}}/><select value={oFilter} onChange={e=>setOFilter(e.target.value)} style={{...INP,maxWidth:160}}><option value="all">전체 상태</option>{Object.entries(STATUS).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}</select></div>
-        {fOrders.map(o=><div key={o._docId||o.orderNum} style={{background:"#FFF",borderRadius:12,padding:16,marginBottom:10,border:`1px solid ${C.border}`,borderLeft:`4px solid ${STATUS[o.status]?.color||"#CCC"}`}}><div style={{display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:8}}><div><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}><span style={{fontWeight:800,fontSize:16,color:C.primary}}>{o.orderNum}</span><span style={{fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:6,background:STATUS[o.status]?.bg,color:STATUS[o.status]?.color}}>{STATUS[o.status]?.label}</span></div><div style={{fontSize:13,color:C.tLight}}>{o.customer?.name} · {o.phone}</div><div style={{fontSize:12,color:C.tLight}}>{o.customer?.address}, {o.customer?.city}, {o.customer?.state} {o.customer?.zip}</div><div style={{fontSize:12,color:C.tLight}}>Venmo/Zelle: {o.customer?.venmoName}</div></div><div style={{textAlign:"right"}}><div style={{fontWeight:800,fontSize:18}}>${(o.total||0).toFixed(2)}</div><div style={{fontSize:11,color:C.tLight}}>{getOrderDate(o)}</div></div></div><div style={{margin:"10px 0",padding:"8px 12px",background:"#F8F9FA",borderRadius:8}}>{(o.items||[]).map((it,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"2px 0"}}><span>{it.name} × {it.qty}</span><span style={{fontWeight:600}}>${(it.price*it.qty).toFixed(2)}</span></div>)}{(o.discount||0)>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:C.danger}}><span>할인</span><span>-${o.discount.toFixed(2)}</span></div>}<div style={{display:"flex",justifyContent:"space-between",fontSize:12}}><span>배송비</span><span>{o.shipping===0?"무료":`$${(o.shipping||0).toFixed(2)}`}</span></div></div><div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>{o.status==="pending_payment"&&<button onClick={()=>handleOrderStatus(o._docId,"confirmed",`${o.orderNum} → 결제 확인`)} style={{...BTNS,background:C.warn}}>💳 결제 확인</button>}{o.status==="payment_submitted"&&<button onClick={()=>handleOrderStatus(o._docId,"confirmed",`${o.orderNum} → 결제 승인`)} style={{...BTNS,background:C.success}}>✓ 결제 승인</button>}{o.status==="confirmed"&&<button onClick={()=>handleOrderStatus(o._docId,"preparing",`${o.orderNum} → 준비중`)} style={{...BTNS,background:"#2980B9"}}>📦 준비 시작</button>}{(o.status==="preparing"||o.status==="confirmed")&&<div style={{display:"flex",gap:6,alignItems:"center"}}><input value={o.trackingNum||""} onChange={e=>handleTrackingUpdate(o._docId,e.target.value)} placeholder="트래킹 번호" style={{...INP,maxWidth:200,padding:"6px 10px",fontSize:12}}/>{o.trackingNum&&<button onClick={()=>handleOrderStatus(o._docId,"shipped",`${o.orderNum} → 발송`)} style={{...BTNS,background:"#8E44AD"}}>🚚 발송</button>}</div>}{o.status==="shipped"&&<button onClick={()=>handleOrderStatus(o._docId,"delivered",`${o.orderNum} → 배송완료`)} style={{...BTNS,background:"#2C3E50"}}>✓ 배송 완료</button>}{o.status!=="cancelled"&&o.status!=="delivered"&&<button onClick={()=>handleOrderStatus(o._docId,"cancelled",`${o.orderNum} → 취소`)} style={{...BTNS,background:"#95A5A6"}}>✕ 취소</button>}{PREV_STATUS[o.status]&&<button onClick={()=>handleRevertStatus(o)} title={`이전 단계(${STATUS[PREV_STATUS[o.status]]?.label})로 되돌리기`} style={{...BTNS,background:"transparent",color:C.tLight,border:`1px solid ${C.border}`}}>↶ 되돌리기</button>}{o.trackingNum&&<span style={{fontSize:11,color:C.tLight}}>📍 {o.trackingNum}</span>}</div></div>)}</div>}
-
-        {loaded&&tab==="products"&&<div><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><h2 style={{fontFamily:"'DM Serif Display',serif",fontSize:24,margin:0}}>🏷️ 제품 관리</h2><button onClick={()=>openProductForm(null)} style={BTN}>+ 제품 추가</button></div><div style={{fontSize:11,color:C.tLight,marginBottom:10,padding:"8px 12px",background:"#F8F9FA",borderRadius:8,border:`1px dashed ${C.border}`}}>💡 카드를 드래그해서 순서를 바꿀 수 있습니다 (고객 사이트에 즉시 반영){reordering&&" · 저장 중..."}</div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:12}}>{sortedProducts.map((p,idx)=><div key={p.id} draggable onDragStart={()=>handleDragStart(idx)} onDragOver={e=>handleDragOver(e,idx)} onDragLeave={handleDragLeave} onDrop={e=>handleDrop(e,idx,sortedProducts)} onDragEnd={handleDragEnd} style={{background:"#FFF",borderRadius:12,padding:16,border:dragOverIdx===idx&&dragIdx!==idx?`2px solid ${C.primary}`:`1px solid ${C.border}`,opacity:dragIdx===idx?0.4:(p.active?1:0.5),position:"relative",cursor:"grab",transition:"border-color .15s, opacity .15s"}}><div style={{position:"absolute",top:8,left:8,fontSize:14,color:C.tLight,userSelect:"none"}}>⋮⋮</div>{!p.active&&<div style={{position:"absolute",top:8,right:8,fontSize:10,background:"#EEE",padding:"2px 6px",borderRadius:4,color:"#999"}}>비활성</div>}<div style={{display:"flex",gap:12,marginTop:4}}><div style={{width:60,height:60,borderRadius:8,overflow:"hidden",flexShrink:0,background:"#F0EDE8",display:"flex",alignItems:"center",justifyContent:"center"}}>{p.media?.length>0&&p.media[0].url?<img src={p.media[0].url} alt="" style={{width:"100%",height:"100%",objectFit:"contain"}} loading="lazy" draggable={false}/>:<span style={{fontSize:30}}>{p.image||"📦"}</span>}</div><div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,marginBottom:2}}>{p.brand&&<span style={{fontSize:10,color:C.accent,fontWeight:600,marginRight:4}}>{p.brand}</span>}{p.nameKo}</div><div style={{fontSize:11,color:C.tLight,marginBottom:6}}>{p.nameEn}</div><div style={{display:"flex",gap:8,alignItems:"center",marginBottom:4}}>{p.sale?<><span style={{fontWeight:800,color:C.danger}}>${(p.salePrice||0).toFixed(2)}</span><span style={{fontSize:11,color:C.tLight,textDecoration:"line-through"}}>${(p.price||0).toFixed(2)}</span></>:<span style={{fontWeight:800,color:C.primary}}>${(p.price||0).toFixed(2)}</span>}</div><div style={{fontSize:12,color:p.stock===0?C.danger:p.stock<=5?C.warn:C.tLight,fontWeight:p.stock<=5?700:400}}>재고: {p.stock}개{p.stock===0&&" ⚠️ 품절"}</div><div style={{fontSize:11,color:C.tLight}}>{categories[p.category]||p.category}{p.media?.length>0&&<span style={{marginLeft:6}}>📷 {p.media.length}</span>}{p.tiered?.length>0&&<span style={{marginLeft:6,color:C.primary}}>📦 {p.tiered.length}구간</span>}</div>{p.tags?.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:3,marginTop:4}}>{p.tags.map((tag,i)=><span key={i} style={{fontSize:9,fontWeight:600,padding:"2px 6px",borderRadius:10,background:tag.color||"#EEE",color:tag.textColor||"#555"}}>{tag.label}</span>)}</div>}</div></div><div style={{display:"flex",gap:6,marginTop:10,justifyContent:"flex-end"}}><button onClick={()=>openProductForm(p)} style={{...BTNS,background:"#3498DB"}}>✏️ 수정</button><button onClick={()=>handleDeleteProduct(p.id)} style={{...BTNS,background:C.danger}}>🗑 삭제</button></div></div>)}</div>
-        {showPF&&pfInitial&&<ProductFormModal initialData={pfInitial} initialCategories={categories} editPid={editPid} onDone={handleProductDone} onClose={()=>setShowPF(false)}/>}
-        </div>}
-
-        {loaded&&tab==="categories"&&<div><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><h2 style={{fontFamily:"'DM Serif Display',serif",fontSize:24,margin:0}}>📂 카테고리 관리</h2><button onClick={()=>{setCatForm({id:"",nameKo:"",nameEn:""});setEditCatId(null);setShowCatF(true);}} style={BTN}>+ 카테고리 추가</button></div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(250px,1fr))",gap:12}}>{Object.entries(categories).map(([id,name])=>{const count=products.filter(p=>p.category===id).length;return<div key={id} style={{background:"#FFF",borderRadius:12,padding:16,border:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:16,fontWeight:700,color:C.primary}}>{name}</div><div style={{fontSize:12,color:C.tLight,marginTop:4}}>ID: {id} · 제품 {count}개</div></div><div style={{display:"flex",gap:6}}><button onClick={()=>{setCatForm({id,nameKo:name,nameEn:id});setEditCatId(id);setShowCatF(true);}} style={{...BTNS,background:"#3498DB"}}>✏️</button><button onClick={()=>handleDeleteCategory(id)} style={{...BTNS,background:C.danger}}>🗑</button></div></div>;})}</div>
-        {showCatF&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}><div style={{background:"#FFF",borderRadius:16,maxWidth:520,width:"100%",padding:24}}><h3 style={{margin:"0 0 20px",fontSize:18,fontWeight:700}}>{editCatId?"카테고리 수정":"새 카테고리 추가"}</h3><div style={{marginBottom:12}}><label style={LBL}>카테고리 ID (영문)</label><input value={catForm.id} onChange={e=>setCatForm(p=>({...p,id:e.target.value.toLowerCase().replace(/[^a-z0-9]/g,"")}))} disabled={!!editCatId} placeholder="예: babyfood" style={{...INP,background:editCatId?"#F5F5F5":"#FFF"}}/></div><div style={{marginBottom:12}}><label style={LBL}>카테고리 이름 (한국어)</label><input value={catForm.nameKo} onChange={e=>setCatForm(p=>({...p,nameKo:e.target.value}))} placeholder="예: 이유식" style={INP}/></div><div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}}><button onClick={()=>setShowCatF(false)} style={{...BTN,background:"transparent",color:C.primary,border:`1px solid ${C.primary}`}}>취소</button><button onClick={handleSaveCategory} style={BTN}>저장</button></div></div></div>}
-        </div>}
-
-        {loaded&&tab==="promos"&&<div><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><h2 style={{fontFamily:"'DM Serif Display',serif",fontSize:24,margin:0}}>🎟️ 프로모션 관리</h2><button onClick={()=>{setPrf({code:"",type:"percent",value:0,minOrder:0,active:true});setEditPrCode(null);setShowPrF(true);}} style={BTN}>+ 추가</button></div>{promos.map(p=><div key={p.code||p._docId} style={{background:"#FFF",borderRadius:12,padding:16,marginBottom:10,border:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",opacity:p.active?1:0.5}}><div><div style={{fontWeight:800,fontSize:16,color:C.primary,letterSpacing:1}}>{p.code}</div><div style={{fontSize:13,color:C.tLight,marginTop:4}}>{p.type==="percent"?`${p.value}% 할인`:`$${p.value} 할인`}{p.minOrder>0&&` · 최소 $${p.minOrder}`}</div></div><div style={{display:"flex",gap:6}}><button onClick={()=>{setPrf({...p});setEditPrCode(p.code);setShowPrF(true);}} style={{...BTNS,background:"#3498DB"}}>✏️</button><button onClick={()=>handleDeletePromo(p.code)} style={{...BTNS,background:C.danger}}>🗑</button></div></div>)}
-        {showPrF&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}><div style={{background:"#FFF",borderRadius:16,maxWidth:520,width:"100%",padding:24}}><h3 style={{margin:"0 0 20px",fontSize:18,fontWeight:700}}>{editPrCode?"프로모션 수정":"새 프로모션"}</h3><div style={{marginBottom:12}}><label style={LBL}>코드</label><input value={prf.code} onChange={e=>setPrf(p=>({...p,code:e.target.value.toUpperCase()}))} style={INP} placeholder="예: SUMMER30"/></div><div style={{marginBottom:12}}><label style={LBL}>타입</label><select value={prf.type} onChange={e=>setPrf(p=>({...p,type:e.target.value}))} style={INP}><option value="percent">% 할인</option><option value="fixed">$ 할인</option></select></div><div style={{marginBottom:12}}><label style={LBL}>할인 값</label><input value={prf.value} onChange={e=>setPrf(p=>({...p,value:Number(e.target.value)}))} type="number" style={INP}/></div><div style={{marginBottom:12}}><label style={LBL}>최소 주문 ($)</label><input value={prf.minOrder} onChange={e=>setPrf(p=>({...p,minOrder:Number(e.target.value)}))} type="number" style={INP}/></div><label style={{display:"flex",alignItems:"center",gap:6,fontSize:13,cursor:"pointer",marginBottom:16}}><input type="checkbox" checked={prf.active} onChange={e=>setPrf(p=>({...p,active:e.target.checked}))}/>활성화</label><div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><button onClick={()=>setShowPrF(false)} style={{...BTN,background:"transparent",color:C.primary,border:`1px solid ${C.primary}`}}>취소</button><button onClick={handleSavePromo} style={BTN}>저장</button></div></div></div>}
-        </div>}
-
-        {loaded&&tab==="inventory"&&(()=>{const invList=sortedProducts.filter(p=>p.active);return <div><h2 style={{fontFamily:"'DM Serif Display',serif",fontSize:24,marginBottom:16}}>📋 재고 관리</h2>{products.filter(p=>p.stock<=5&&p.active).length>0&&<div style={{background:C.wLight,border:`1px solid ${C.warn}33`,borderRadius:12,padding:"14px 16px",marginBottom:16}}><div style={{fontWeight:700,fontSize:13,color:C.warn,marginBottom:6}}>⚠️ 재고 부족 / 품절</div>{products.filter(p=>p.stock<=5&&p.active).map(p=><div key={p.id} style={{fontSize:12,padding:"2px 0"}}>{p.image||"📦"} {p.nameKo} — <strong style={{color:p.stock===0?C.danger:C.warn}}>{p.stock===0?"품절":`${p.stock}개`}</strong></div>)}</div>}<div style={{fontSize:11,color:C.tLight,marginBottom:10,padding:"8px 12px",background:"#F8F9FA",borderRadius:8,border:`1px dashed ${C.border}`}}>💡 행을 드래그해서 순서를 바꿀 수 있습니다 (제품 관리와 동일한 순서){reordering&&" · 저장 중..."}</div><div style={{background:"#FFF",borderRadius:14,border:`1px solid ${C.border}`,overflow:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}><thead><tr style={{background:"#F8F9FA"}}><th style={{padding:"12px 8px",width:24}}></th>{["제품","카테고리","가격","재고","수정"].map(h=><th key={h} style={{padding:"12px 16px",textAlign:h==="제품"?"left":"center",fontWeight:700,color:C.tLight,fontSize:11,textTransform:"uppercase"}}>{h}</th>)}</tr></thead><tbody>{invList.map((p,idx)=><tr key={p.id} draggable onDragStart={()=>handleDragStart(idx)} onDragOver={e=>handleDragOver(e,idx)} onDragLeave={handleDragLeave} onDrop={e=>handleDrop(e,idx,invList)} onDragEnd={handleDragEnd} style={{borderTop:`1px solid ${C.border}`,background:dragOverIdx===idx&&dragIdx!==idx?C.pLight:"transparent",opacity:dragIdx===idx?0.4:1,cursor:"grab",transition:"background .15s, opacity .15s"}}><td style={{padding:"10px 4px",textAlign:"center",color:C.tLight,fontSize:14,userSelect:"none"}}>⋮⋮</td><td style={{padding:"10px 16px"}}><div style={{display:"flex",alignItems:"center",gap:8}}>{p.media?.length>0&&p.media[0].url?<div style={{width:28,height:28,borderRadius:4,overflow:"hidden",flexShrink:0}}><img src={p.media[0].url} alt="" style={{width:"100%",height:"100%",objectFit:"contain"}} loading="lazy" draggable={false}/></div>:<span style={{fontSize:20}}>{p.image||"📦"}</span>}<span style={{fontWeight:600}}>{p.nameKo}</span></div></td><td style={{padding:"10px 16px",textAlign:"center",color:C.tLight}}>{categories[p.category]||p.category}</td><td style={{padding:"10px 16px",textAlign:"center",fontWeight:700}}>${(p.sale?p.salePrice:p.price||0).toFixed(2)}</td><td style={{padding:"10px 16px",textAlign:"center"}}><span style={{fontWeight:700,padding:"3px 10px",borderRadius:6,fontSize:12,background:p.stock===0?C.dLight:p.stock<=5?C.wLight:C.pLight,color:p.stock===0?C.danger:p.stock<=5?C.warn:C.primary}}>{p.stock}</span></td><td style={{padding:"10px 16px",textAlign:"center"}}><div style={{display:"flex",gap:4,justifyContent:"center",alignItems:"center"}} onMouseDown={e=>e.stopPropagation()}><button onClick={()=>handleStockChange(p.id,p.stock-1)} style={{...BTNS,padding:"4px 8px",background:C.tLight}}>−</button><input value={p.stock} onChange={e=>handleStockChange(p.id,parseInt(e.target.value)||0)} draggable={false} style={{width:50,textAlign:"center",border:`1px solid ${C.border}`,borderRadius:6,padding:4,fontSize:13,fontFamily:"'DM Sans',sans-serif"}}/><button onClick={()=>handleStockChange(p.id,p.stock+1)} style={{...BTNS,padding:"4px 8px"}}>+</button></div></td></tr>)}</tbody></table></div></div>;})()}
+    <div style={{fontFamily:"'DM Sans',sans-serif",background:C.bg,minHeight:"100vh",padding:20}}>
+      <div style={{display:"flex",justifyContent:"center",gap:12,marginBottom:24,flexWrap:"wrap"}}>
+        {TABS.map(t => (
+          <button
+            key={t.k}
+            onClick={() => setTab(t.k)}
+            style={{
+              ...BTN,
+              background: tab === t.k ? C.primary : "#FFF",
+              color: tab === t.k ? "#FFF" : C.text,
+              border: `1px solid ${tab === t.k ? C.primary : C.border}`,
+            }}
+          >
+            {t.i} {t.l}
+          </button>
+        ))}
       </div>
     </div>
   );
