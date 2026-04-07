@@ -420,10 +420,31 @@ export default function NovoMarket() {
     setToast(t.itemAdded);
   };
 
-  const C = { bg:"#F7FAFB", card:"#FFF", pri:"#6AADCC", priL:"#EAF5FA", acc:"#E8879A", accBg:"#FFF0F3", txt:"#2A2A2A", mid:"#5A5A5A", light:"#9AA5AE", bdr:"#E0EBF0", danger:"#D94F4F", wh:"#FFF" };
-  const B = { border:"none", borderRadius:10, cursor:"pointer", fontWeight:600, fontFamily:"'Nunito',sans-serif", transition:"all .15s" };
+  const C = { bg:"#FFF9F7", card:"#FFF", pri:"#5B9A8B", priL:"#EDF6F3", acc:"#E8879A", accBg:"#FFF0F3", txt:"#2A2A2A", mid:"#666", light:"#999", bdr:"#F0ECEC", danger:"#E85D5D", wh:"#FFF", warm:"#FFF5EE", peach:"#FFECD2" };
+  const B = { border:"none", borderRadius:12, cursor:"pointer", fontWeight:600, fontFamily:"'Nunito',sans-serif", transition:"all .2s ease" };
   const pName = p => lang === "en" ? (p.nameEn || p.name_en || p.name || "") : (p.nameKo || p.name_ko || p.name || "");
   const pDesc = p => lang === "en" ? (p.descEn || "") : (p.descKo || "");
+  const renderDesc = (text) => {
+    if (!text) return null;
+    return text.split("\n").map((line, li) => {
+      const parts = [];
+      let remaining = line;
+      let key = 0;
+      const regex = /(\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*)/g;
+      let lastIdx = 0;
+      let match;
+      while ((match = regex.exec(line)) !== null) {
+        if (match.index > lastIdx) parts.push(<span key={key++}>{line.slice(lastIdx, match.index)}</span>);
+        if (match[2]) parts.push(<strong key={key++}><em>{match[2]}</em></strong>);
+        else if (match[3]) parts.push(<strong key={key++}>{match[3]}</strong>);
+        else if (match[4]) parts.push(<em key={key++}>{match[4]}</em>);
+        lastIdx = match.index + match[0].length;
+      }
+      if (lastIdx < line.length) parts.push(<span key={key++}>{line.slice(lastIdx)}</span>);
+      if (parts.length === 0 && line === "") return <br key={li} />;
+      return <div key={li} style={{ marginBottom: 2 }}>{parts.length > 0 ? parts : line}</div>;
+    });
+  };
   const getOrderDate = o => { if (o.createdAt?.toDate) return o.createdAt.toDate().toLocaleDateString("en-US"); if (o.createdAt) return new Date(o.createdAt).toLocaleDateString("en-US"); return ""; };
   const resetAll = () => { setSelProd(null); setStep(0); setEditingOrder(null); setPayingOrder(null); setAddingToOrder(null); setPayMethod(null); setPayId(""); setStockError(null); setDeliveryMethod("delivery"); };
 
@@ -492,8 +513,8 @@ export default function NovoMarket() {
   );};
 
   return <div style={{ fontFamily: "'Nunito',sans-serif", background: C.bg, minHeight: "100vh", maxWidth: 560, margin: "0 auto", color: C.txt, position: "relative", paddingBottom: 70 }}>
-    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Playfair+Display:wght@700&display=swap" rel="stylesheet" />
-    <style>{`@media(min-width:561px){body{background:#E8EDF0}}`}</style>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Playfair+Display:wght@700&display=swap" rel="stylesheet" />
+    <style>{`@media(min-width:561px){body{background:#F5F0ED}} *{-webkit-tap-highlight-color:transparent} @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}} .novo-card:active{transform:scale(0.97)}`}</style>
     {toast && <div style={{ position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)", zIndex: 999, background: C.pri, color: "#FFF", padding: "10px 24px", borderRadius: 10, fontSize: 13, fontWeight: 700, boxShadow: "0 4px 16px rgba(0,0,0,.2)", maxWidth: 400 }}>{toast}</div>}
 
     {showCancelPolicy && <div onClick={() => setShowCancelPolicy(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
@@ -505,20 +526,20 @@ export default function NovoMarket() {
     </div>}
 
     {/* HEADER */}
-    <div style={{ background: "#FFF", padding: "0 16px 4px", position: "sticky", top: 0, zIndex: 100, boxShadow: "0 1px 6px rgba(106,173,204,.1)", borderBottom: `1px solid ${C.bdr}` }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0 0" }}>
-        <button onClick={() => setLang(lang === "en" ? "ko" : "en")} style={{ ...B, background: C.priL, color: C.pri, padding: "4px 10px", fontSize: 10, borderRadius: 6 }}>{lang === "en" ? "한국어" : "EN"}</button>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button onClick={() => setShowCancelPolicy(true)} style={{ ...B, background: "none", color: C.light, padding: "4px 8px", fontSize: 10, border: `1px solid ${C.bdr}` }}>📋</button>
-          <div onClick={() => { setPage("cart"); resetAll(); }} style={{ position: "relative", cursor: "pointer", background: C.priL, borderRadius: "50%", width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <span style={{ fontSize: 16 }}>🛒</span>
-            {cartN > 0 && <span style={{ position: "absolute", top: -3, right: -3, background: C.acc, color: "#FFF", borderRadius: "50%", width: 17, height: 17, fontSize: 9, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>{cartN}</span>}
+    <div style={{ background: "#FFF", padding: "10px 16px 8px", position: "sticky", top: 0, zIndex: 100, boxShadow: "0 2px 12px rgba(0,0,0,.06)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div onClick={() => { setPage("shop"); resetAll(); }} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
+          <img src={NOVO_LOGO} alt="NOVO MARKET" style={{ width: 44, height: 44, borderRadius: 12 }} />
+          <div><div style={{ fontSize: 14, fontWeight: 800, color: C.pri, letterSpacing: -0.3 }}>NOVO MARKET</div><div style={{ fontSize: 9, color: C.light, fontWeight: 600, letterSpacing: 0.5 }}>{t.tag}</div></div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button onClick={() => setLang(lang === "en" ? "ko" : "en")} style={{ ...B, background: C.priL, color: C.pri, padding: "5px 10px", fontSize: 10, borderRadius: 20, fontWeight: 700 }}>{lang === "en" ? "한국어" : "EN"}</button>
+          <button onClick={() => setShowCancelPolicy(true)} style={{ ...B, background: "none", color: C.light, padding: 4, fontSize: 16 }}>📋</button>
+          <div onClick={() => { setPage("cart"); resetAll(); }} style={{ position: "relative", cursor: "pointer" }}>
+            <span style={{ fontSize: 22 }}>🛒</span>
+            {cartN > 0 && <span style={{ position: "absolute", top: -6, right: -8, background: C.acc, color: "#FFF", borderRadius: "50%", width: 18, height: 18, fontSize: 9, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 4px rgba(232,135,154,.4)" }}>{cartN}</span>}
           </div>
         </div>
-      </div>
-      <div onClick={() => { setPage("shop"); resetAll(); }} style={{ cursor: "pointer", textAlign: "center", marginTop: -8 }}>
-        <img src={NOVO_LOGO} alt="NOVO MARKET" style={{ width: 140, height: "auto", marginBottom: -2 }} />
-        <div style={{ fontSize: 9, color: C.light, letterSpacing: 1.5, fontWeight: 600, marginTop: 0, textTransform: "uppercase" }}>{t.tag}</div>
       </div>
     </div>
 
@@ -529,15 +550,15 @@ export default function NovoMarket() {
       const p = activeProducts.find(x => x.id === selProd); if (!p) return null;
       const nm = pName(p); const dc = pDesc(p); const bp = basePrice(p);
       const ic = cart.find(c => c.id === p.id); const tp = ic ? tieredPrice(p, ic.qty) : bp;
-      return <div style={{ padding: 16, paddingBottom: 100 }}>
-        <button onClick={() => setSelProd(null)} style={{ ...B, background: "none", color: C.pri, padding: "0 0 12px", fontSize: 14 }}>{t.back}</button>
+      return <div style={{ padding: 16, paddingBottom: 100, animation: "fadeUp .3s ease" }}>
+        <button onClick={() => setSelProd(null)} style={{ ...B, background: "none", color: C.pri, padding: "4px 0 14px", fontSize: 14, display: "flex", alignItems: "center", gap: 4 }}>← {t.back}</button>
         <Gallery media={p.media} emoji={p.image} name={nm} />
         <div style={{ marginTop: 16 }}>
-          {p.sale && <span style={{ background: C.danger, color: "#FFF", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 5, marginBottom: 8, display: "inline-block" }}>{Math.round((1 - p.salePrice / p.price) * 100)}% {t.off}</span>}
-          {p.brand && <div style={{ fontSize: 11, color: C.acc, fontWeight: 700, marginBottom: 2 }}>{p.brand}</div>}
-          <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, margin: "8px 0 6px", lineHeight: 1.3 }}>{nm}</h2>
+          {p.sale && <span style={{ background: "linear-gradient(135deg, #E85D5D, #E8879A)", color: "#FFF", fontSize: 11, fontWeight: 700, padding: "4px 12px", borderRadius: 20, marginBottom: 8, display: "inline-block" }}>{Math.round((1 - p.salePrice / p.price) * 100)}% {t.off}</span>}
+          {p.brand && <div style={{ fontSize: 12, color: C.acc, fontWeight: 800, marginBottom: 4, letterSpacing: 0.5 }}>{p.brand}</div>}
+          <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: 24, margin: "6px 0 8px", lineHeight: 1.35, fontWeight: 700 }}>{nm}</h2>
           {p.tags && p.tags.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 8 }}>{p.tags.map((tag, i) => <span key={i} style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20, background: tag.color || "#EEE", color: tag.textColor || "#555" }}>{tag.label}</span>)}</div>}
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}><span style={{ fontSize: 24, fontWeight: 800, color: p.sale ? C.danger : C.pri }}>{fmt(bp)}</span>{p.sale && <span style={{ fontSize: 15, textDecoration: "line-through", color: C.light }}>{fmt(p.price)}</span>}</div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 12, padding: "12px 0", borderTop: `1px solid ${C.bdr}`, borderBottom: `1px solid ${C.bdr}` }}><span style={{ fontSize: 28, fontWeight: 900, color: p.sale ? C.danger : C.pri }}>{fmt(bp)}</span>{p.sale && <span style={{ fontSize: 15, textDecoration: "line-through", color: C.light }}>{fmt(p.price)}</span>}</div>
           {p.tiered && p.tiered.length > 0 && <div style={{ background: C.priL, borderRadius: 10, padding: "10px 14px", marginBottom: 14 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: C.pri, marginBottom: 6 }}>📦 {t.bulk}</div>
             <div style={{ display: "flex", gap: 6 }}>
@@ -547,11 +568,11 @@ export default function NovoMarket() {
             </div>
             {ic && <div style={{ fontSize: 11, color: C.pri, fontWeight: 600, marginTop: 6, textAlign: "center" }}>✓ {t.cur}: {fmt(tp)}/{t.ea}</div>}
           </div>}
-          <p style={{ fontSize: 14, lineHeight: 1.7, color: C.mid, margin: "0 0 20px" }}>{dc}</p>
+          <div style={{ fontSize: 14, lineHeight: 1.7, color: C.mid, margin: "0 0 20px" }}>{renderDesc(dc)}</div>
           {p.stock === 0 ? <div style={{ ...B, width: "100%", padding: 14, fontSize: 15, textAlign: "center", background: "#CCC", color: "#FFF", borderRadius: 12 }}>{t.sold}</div>
             : <div style={{ display: "flex", gap: 10 }}>
-              {ic && <div style={{ display: "flex", alignItems: "center", gap: 12, background: C.priL, borderRadius: 12, padding: "0 14px" }}><button onClick={() => updQty(p.id, -1)} style={{ ...B, background: "none", color: C.pri, fontSize: 20, padding: 8 }}>−</button><span style={{ fontWeight: 800, fontSize: 16, minWidth: 20, textAlign: "center" }}>{ic.qty}</span><button onClick={() => updQty(p.id, 1)} style={{ ...B, background: "none", color: C.pri, fontSize: 20, padding: 8 }}>+</button></div>}
-              <button onClick={() => addToCart(p)} style={{ ...B, flex: 1, padding: 14, fontSize: 15, background: C.pri, color: "#FFF", borderRadius: 12 }}>{ic ? `✓ ${t.add}` : t.add}</button>
+              {ic && <div style={{ display: "flex", alignItems: "center", gap: 0, background: "#FFF", borderRadius: 12, border: `2px solid ${C.pri}`, overflow: "hidden" }}><button onClick={() => updQty(p.id, -1)} style={{ ...B, background: "none", color: C.pri, fontSize: 20, padding: "8px 14px", borderRadius: 0 }}>−</button><span style={{ fontWeight: 800, fontSize: 16, minWidth: 28, textAlign: "center", color: C.pri }}>{ic.qty}</span><button onClick={() => updQty(p.id, 1)} style={{ ...B, background: "none", color: C.pri, fontSize: 20, padding: "8px 14px", borderRadius: 0 }}>+</button></div>}
+              <button onClick={() => addToCart(p)} style={{ ...B, flex: 1, padding: 14, fontSize: 15, background: C.pri, color: "#FFF", borderRadius: 12, boxShadow: "0 3px 12px rgba(91,154,139,.3)" }}>{ic ? `✓ ${t.add}` : t.add}</button>
             </div>}
           {p.stock > 0 && p.stock <= 10 && <div style={{ marginTop: 10, fontSize: 12, color: "#E67E22", fontWeight: 600 }}>⚡ {lang === "en" ? `Only ${p.stock} left!` : `${p.stock}개 남음!`}</div>}
         </div>
@@ -576,34 +597,34 @@ export default function NovoMarket() {
 
     {/* ─── SHOP GRID (normal) ─── */}
     {loaded && page === "shop" && !selProd && !addingToOrder && <div style={{ padding: "12px 16px 20px" }}>
-      <div style={{ background: C.wh, borderRadius: 10, border: `1px solid ${C.bdr}`, padding: "9px 12px", display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}><span>🔍</span><input value={search} onChange={e => setSearch(e.target.value)} placeholder={t.search} style={{ border: "none", outline: "none", flex: 1, fontSize: 13, fontFamily: "'Nunito',sans-serif", background: "transparent" }} /></div>
-      <div style={{ display: "flex", gap: 5, overflowX: "auto", paddingBottom: 10 }}>
-        <button onClick={() => setCat("all")} style={{ ...B, padding: "5px 12px", fontSize: 11, whiteSpace: "nowrap", background: cat === "all" ? C.pri : C.wh, color: cat === "all" ? "#FFF" : C.light, border: `1px solid ${cat === "all" ? C.pri : C.bdr}` }}>{t.allCat}</button>
-        {catList.map(c => <button key={c.id} onClick={() => setCat(c.id)} style={{ ...B, padding: "5px 12px", fontSize: 11, whiteSpace: "nowrap", background: cat === c.id ? C.pri : C.wh, color: cat === c.id ? "#FFF" : C.light, border: `1px solid ${cat === c.id ? C.pri : C.bdr}` }}>{lang === "en" ? c.nameEn : c.nameKo}</button>)}
+      <div style={{ background: "#FFF", borderRadius: 24, padding: "10px 16px", display: "flex", alignItems: "center", gap: 10, marginBottom: 12, boxShadow: "0 2px 10px rgba(0,0,0,.05)" }}><span style={{ fontSize: 16, opacity: 0.4 }}>🔍</span><input value={search} onChange={e => setSearch(e.target.value)} placeholder={t.search} style={{ border: "none", outline: "none", flex: 1, fontSize: 14, fontFamily: "'Nunito',sans-serif", background: "transparent", color: C.txt }} /></div>
+      <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8 }}>
+        <button onClick={() => setCat("all")} style={{ ...B, padding: "6px 14px", fontSize: 12, whiteSpace: "nowrap", background: cat === "all" ? C.pri : "#FFF", color: cat === "all" ? "#FFF" : C.mid, borderRadius: 20, boxShadow: cat === "all" ? "0 2px 8px rgba(91,154,139,.3)" : "0 1px 4px rgba(0,0,0,.06)" }}>{t.allCat}</button>
+        {catList.map(c => <button key={c.id} onClick={() => setCat(c.id)} style={{ ...B, padding: "6px 14px", fontSize: 12, whiteSpace: "nowrap", background: cat === c.id ? C.pri : "#FFF", color: cat === c.id ? "#FFF" : C.mid, borderRadius: 20, boxShadow: cat === c.id ? "0 2px 8px rgba(91,154,139,.3)" : "0 1px 4px rgba(0,0,0,.06)" }}>{lang === "en" ? c.nameEn : c.nameKo}</button>)}
       </div>
-      {brandList.length > 0 && <div style={{ display: "flex", gap: 5, overflowX: "auto", paddingBottom: 8, marginBottom: 4 }}>
-        <button onClick={() => setBrandFilter("all")} style={{ ...B, padding: "4px 10px", fontSize: 10, whiteSpace: "nowrap", background: brandFilter === "all" ? C.acc : C.wh, color: brandFilter === "all" ? "#FFF" : C.light, border: `1px solid ${brandFilter === "all" ? C.acc : C.bdr}`, borderRadius: 14 }}>{lang === "en" ? "All Brands" : "전체 브랜드"}</button>
-        {brandList.map(b => <button key={b} onClick={() => setBrandFilter(b)} style={{ ...B, padding: "4px 10px", fontSize: 10, whiteSpace: "nowrap", background: brandFilter === b ? C.acc : C.wh, color: brandFilter === b ? "#FFF" : C.light, border: `1px solid ${brandFilter === b ? C.acc : C.bdr}`, borderRadius: 14 }}>{b}</button>)}
+      {brandList.length > 0 && <div style={{ display: "flex", gap: 5, overflowX: "auto", paddingBottom: 8 }}>
+        <button onClick={() => setBrandFilter("all")} style={{ ...B, padding: "5px 12px", fontSize: 10, whiteSpace: "nowrap", background: brandFilter === "all" ? C.acc : "transparent", color: brandFilter === "all" ? "#FFF" : C.acc, borderRadius: 20, border: `1.5px solid ${C.acc}` }}>{lang === "en" ? "All Brands" : "전체 브랜드"}</button>
+        {brandList.map(b => <button key={b} onClick={() => setBrandFilter(b)} style={{ ...B, padding: "5px 12px", fontSize: 10, whiteSpace: "nowrap", background: brandFilter === b ? C.acc : "transparent", color: brandFilter === b ? "#FFF" : C.acc, borderRadius: 20, border: `1.5px solid ${brandFilter === b ? C.acc : "rgba(232,135,154,.3)"}` }}>{b}</button>)}
       </div>}
-      <div style={{ background: C.accBg, borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: 12, color: C.acc, fontWeight: 600 }}>🚚 {t.freeNote}</div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+      <div style={{ background: "linear-gradient(135deg, #FFF0F3, #FFECD2)", borderRadius: 12, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: C.acc, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>🚚 {t.freeNote}</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(155px, 1fr))", gap: 12 }}>
         {filtered.map(p => {
           const nm = pName(p); const pr = basePrice(p); const so = p.stock === 0; const hasImg = p.media && p.media.length > 0 && p.media[0].url;
-          return <div key={p.id} onClick={() => setSelProd(p.id)} style={{ background: C.card, borderRadius: 12, overflow: "hidden", border: `1px solid ${C.bdr}`, position: "relative", cursor: "pointer", opacity: so ? .6 : 1, boxShadow: "0 1px 4px rgba(0,0,0,.04)", display: "flex", flexDirection: "column" }}>
-            {p.sale && !so && <div style={{ position: "absolute", top: 6, left: 6, background: C.danger, color: "#FFF", fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4, zIndex: 2 }}>{Math.round((1 - p.salePrice / p.price) * 100)}% {t.off}</div>}
-            {so && <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%) rotate(-12deg)", background: "rgba(0,0,0,.7)", color: "#FFF", fontSize: 12, fontWeight: 800, padding: "4px 16px", borderRadius: 4, zIndex: 2 }}>{t.sold}</div>}
-            {p.media && p.media.length > 1 && <div style={{ position: "absolute", top: 6, right: 6, background: "rgba(0,0,0,.5)", color: "#FFF", borderRadius: 10, padding: "1px 6px", fontSize: 9, fontWeight: 600, zIndex: 2 }}>📷 {p.media.length}</div>}
-            <div style={{ height: 150, background: "#F5F2ED", flexShrink: 0 }}>{hasImg ? <LazyImg src={p.media[0].url} alt={nm} style={{ width: "100%", height: 150 }} /> : <div style={{ height: 150, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 48 }}>{p.image || "📦"}</div>}</div>
-            <div style={{ padding: "8px 10px 10px", display: "flex", flexDirection: "column", flex: 1 }}>
-              {p.brand && <div style={{ fontSize: 9, color: C.acc, fontWeight: 700, marginBottom: 1 }}>{p.brand}</div>}
-              <div style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.3, marginBottom: 1, minHeight: 14 }}>{p.nameKo || ""}</div>
-              <div style={{ fontSize: 9, color: C.light, lineHeight: 1.2, marginBottom: 4, minHeight: 12 }}>{p.nameEn || ""}</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4 }}>{p.sale ? <><span style={{ fontSize: 14, fontWeight: 800, color: C.danger }}>{fmt(pr)}</span><span style={{ fontSize: 10, color: C.light, textDecoration: "line-through" }}>{fmt(p.price)}</span></> : <span style={{ fontSize: 14, fontWeight: 800, color: C.pri }}>{fmt(pr)}</span>}</div>
-              <div style={{ minHeight: 20, marginBottom: 4 }}>
-                {p.tiered && p.tiered.length > 0 && <div style={{ fontSize: 9, color: C.pri, fontWeight: 600, background: C.priL, padding: "2px 6px", borderRadius: 4, display: "inline-block" }}>📦 {p.tiered[0].qty}+ {fmt(Number(p.tiered[0].price))}</div>}
-                {p.tags && p.tags.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginTop: 2 }}>{p.tags.slice(0, 2).map((tag, i) => <span key={i} style={{ fontSize: 8, fontWeight: 600, padding: "1px 5px", borderRadius: 8, background: tag.color || "#EEE", color: tag.textColor || "#555" }}>{tag.label}</span>)}{p.tags.length > 2 && <span style={{ fontSize: 8, color: C.light }}>+{p.tags.length - 2}</span>}</div>}
+          return <div key={p.id} className="novo-card" onClick={() => setSelProd(p.id)} style={{ background: "#FFF", borderRadius: 16, overflow: "hidden", position: "relative", cursor: "pointer", opacity: so ? .55 : 1, boxShadow: "0 2px 12px rgba(0,0,0,.06)", display: "flex", flexDirection: "column", transition: "transform .2s, box-shadow .2s" }}>
+            {p.sale && !so && <div style={{ position: "absolute", top: 8, left: 8, background: "linear-gradient(135deg, #E85D5D, #E8879A)", color: "#FFF", fontSize: 10, fontWeight: 800, padding: "3px 10px", borderRadius: 20, zIndex: 2 }}>{Math.round((1 - p.salePrice / p.price) * 100)}%</div>}
+            {so && <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", background: "rgba(0,0,0,.6)", color: "#FFF", fontSize: 11, fontWeight: 800, padding: "6px 20px", borderRadius: 20, zIndex: 2, backdropFilter: "blur(2px)" }}>{t.sold}</div>}
+            {p.media && p.media.length > 1 && <div style={{ position: "absolute", top: 8, right: 8, background: "rgba(255,255,255,.85)", color: C.mid, borderRadius: 12, padding: "2px 8px", fontSize: 10, fontWeight: 700, zIndex: 2, backdropFilter: "blur(4px)" }}>+{p.media.length}</div>}
+            <div style={{ height: 170, background: C.warm, flexShrink: 0 }}>{hasImg ? <LazyImg src={p.media[0].url} alt={nm} style={{ width: "100%", height: 170, objectFit: "contain" }} /> : <div style={{ height: 170, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 48 }}>{p.image || "📦"}</div>}</div>
+            <div style={{ padding: "10px 12px 12px", display: "flex", flexDirection: "column", flex: 1 }}>
+              {p.brand && <div style={{ fontSize: 10, color: C.acc, fontWeight: 700, marginBottom: 2, letterSpacing: 0.3 }}>{p.brand}</div>}
+              <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.35, marginBottom: 1, color: C.txt }}>{p.nameKo || ""}</div>
+              <div style={{ fontSize: 10, color: C.light, lineHeight: 1.2, marginBottom: 6 }}>{p.nameEn || ""}</div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 5, marginBottom: 6 }}>{p.sale ? <><span style={{ fontSize: 16, fontWeight: 900, color: C.danger }}>{fmt(pr)}</span><span style={{ fontSize: 10, color: C.light, textDecoration: "line-through" }}>{fmt(p.price)}</span></> : <span style={{ fontSize: 16, fontWeight: 900, color: C.pri }}>{fmt(pr)}</span>}</div>
+              <div style={{ minHeight: 18, marginBottom: 6 }}>
+                {p.tiered && p.tiered.length > 0 && <div style={{ fontSize: 9, color: C.pri, fontWeight: 700, background: C.priL, padding: "3px 8px", borderRadius: 8, display: "inline-block" }}>📦 {p.tiered[0].qty}+ {fmt(Number(p.tiered[0].price))}</div>}
+                {p.tags && p.tags.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginTop: 3 }}>{p.tags.slice(0, 2).map((tag, i) => <span key={i} style={{ fontSize: 9, fontWeight: 600, padding: "2px 6px", borderRadius: 10, background: tag.color || "#F5F5F5", color: tag.textColor || "#666" }}>{tag.label}</span>)}{p.tags.length > 2 && <span style={{ fontSize: 9, color: C.light }}>+{p.tags.length - 2}</span>}</div>}
               </div>
-              <button onClick={e => { e.stopPropagation(); if (!so) addToCart(p); }} disabled={so} style={{ ...B, width: "100%", padding: 7, fontSize: 11, background: so ? "#CCC" : C.pri, color: "#FFF", marginTop: "auto" }}>{so ? t.sold : t.add}</button>
+              <button onClick={e => { e.stopPropagation(); if (!so) addToCart(p); }} disabled={so} style={{ ...B, width: "100%", padding: "8px 0", fontSize: 12, background: so ? "#DDD" : C.pri, color: "#FFF", marginTop: "auto", borderRadius: 10, boxShadow: so ? "none" : "0 2px 8px rgba(91,154,139,.25)" }}>{so ? t.sold : t.add}</button>
             </div>
           </div>;
         })}
@@ -754,12 +775,12 @@ export default function NovoMarket() {
     {page === "history" && editingOrder && <EditOrderPanel order={editingOrder} products={products} lang={lang} t={t} C={C} B={B} pName={pName} onClose={() => setEditingOrder(null)} onUpdate={handleUpdateOrder} onDelete={handleDeleteOrder} />}
 
     {/* ─── BOTTOM TAB BAR (3 tabs) ─── */}
-    <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 560, background: C.wh, borderTop: `1px solid ${C.bdr}`, display: "flex", zIndex: 100, boxShadow: "0 -2px 10px rgba(0,0,0,.06)" }}>
+    <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 560, background: "#FFF", display: "flex", zIndex: 100, boxShadow: "0 -4px 20px rgba(0,0,0,.08)", borderRadius: "16px 16px 0 0", padding: "2px 0" }}>
       {[{ k: "shop", i: "🏠", l: t.shop }, { k: "cart", i: "🛒", l: t.cart, badge: cartN }, { k: "history", i: "📋", l: t.history }].map(tab =>
-        <button key={tab.k} onClick={() => { setPage(tab.k); resetAll(); }} style={{ flex: 1, border: "none", background: "none", cursor: "pointer", padding: "10px 0 8px", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, position: "relative", fontFamily: "'Nunito',sans-serif" }}>
-          <div style={{ fontSize: 20, position: "relative" }}>{tab.i}{tab.badge > 0 && <span style={{ position: "absolute", top: -5, right: -10, background: C.acc, color: "#FFF", borderRadius: "50%", width: 16, height: 16, fontSize: 9, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>{tab.badge}</span>}</div>
+        <button key={tab.k} onClick={() => { setPage(tab.k); resetAll(); }} style={{ flex: 1, border: "none", background: "none", cursor: "pointer", padding: "10px 0 8px", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, position: "relative", fontFamily: "'Nunito',sans-serif", transition: "all .2s" }}>
+          <div style={{ fontSize: 22, position: "relative", transition: "transform .2s", transform: page === tab.k ? "scale(1.1)" : "scale(1)" }}>{tab.i}{tab.badge > 0 && <span style={{ position: "absolute", top: -6, right: -10, background: C.acc, color: "#FFF", borderRadius: "50%", width: 17, height: 17, fontSize: 9, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 4px rgba(232,135,154,.4)" }}>{tab.badge}</span>}</div>
           <span style={{ fontSize: 10, fontWeight: page === tab.k ? 800 : 500, color: page === tab.k ? C.pri : C.light }}>{tab.l}</span>
-          {page === tab.k && <div style={{ position: "absolute", top: 0, left: "25%", right: "25%", height: 2, background: C.pri, borderRadius: "0 0 2px 2px" }} />}
+          {page === tab.k && <div style={{ position: "absolute", top: 0, left: "30%", right: "30%", height: 3, background: C.pri, borderRadius: "0 0 3px 3px" }} />}
         </button>)}
     </div>
   </div>;
