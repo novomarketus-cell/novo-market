@@ -183,6 +183,7 @@ function AdminDashboard() {
   const trackingTimers=useRef({});const stockTimers=useRef({});
   const [dragIdx,setDragIdx]=useState(null);const [dragOverIdx,setDragOverIdx]=useState(null);
   const [pSearch,setPSearch]=useState("");const [pSort,setPSort]=useState("order");const [pCatFilter,setPCatFilter]=useState("all");
+  const [iSearch,setISearch]=useState("");const [iSort,setISort]=useState("name");const [iCatFilter,setICatFilter]=useState("all");
 
   useEffect(()=>{
     const unsubs=[];
@@ -339,7 +340,41 @@ function AdminDashboard() {
         {showPrF&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}><div style={{background:"#FFF",borderRadius:16,maxWidth:520,width:"100%",padding:24}}><h3 style={{margin:"0 0 20px",fontSize:18,fontWeight:700}}>{editPrCode?"프로모션 수정":"새 프로모션"}</h3><div style={{marginBottom:12}}><label style={LBL}>코드</label><input value={prf.code} onChange={e=>setPrf(p=>({...p,code:e.target.value.toUpperCase()}))} style={INP} placeholder="예: SUMMER30"/></div><div style={{marginBottom:12}}><label style={LBL}>타입</label><select value={prf.type} onChange={e=>setPrf(p=>({...p,type:e.target.value}))} style={INP}><option value="percent">% 할인</option><option value="fixed">$ 할인</option></select></div><div style={{marginBottom:12}}><label style={LBL}>할인 값</label><input value={prf.value} onChange={e=>setPrf(p=>({...p,value:Number(e.target.value)}))} type="number" style={INP}/></div><div style={{marginBottom:12}}><label style={LBL}>최소 주문 ($)</label><input value={prf.minOrder} onChange={e=>setPrf(p=>({...p,minOrder:Number(e.target.value)}))} type="number" style={INP}/></div><label style={{display:"flex",alignItems:"center",gap:6,fontSize:13,cursor:"pointer",marginBottom:16}}><input type="checkbox" checked={prf.active} onChange={e=>setPrf(p=>({...p,active:e.target.checked}))}/>활성화</label><div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><button onClick={()=>setShowPrF(false)} style={{...BTN,background:"transparent",color:C.primary,border:`1px solid ${C.primary}`}}>취소</button><button onClick={handleSavePromo} style={BTN}>저장</button></div></div></div>}
         </div>}
 
-        {loaded&&tab==="inventory"&&<div><h2 style={{fontFamily:"'DM Serif Display',serif",fontSize:24,marginBottom:16}}>📋 재고 관리</h2>{products.filter(p=>p.stock<=5&&p.active).length>0&&<div style={{background:C.wLight,border:`1px solid ${C.warn}33`,borderRadius:12,padding:"14px 16px",marginBottom:16}}><div style={{fontWeight:700,fontSize:13,color:C.warn,marginBottom:6}}>⚠️ 재고 부족 / 품절</div>{products.filter(p=>p.stock<=5&&p.active).map(p=><div key={p.id} style={{fontSize:12,padding:"2px 0"}}>{p.image||"📦"} {p.nameKo} — <strong style={{color:p.stock===0?C.danger:C.warn}}>{p.stock===0?"품절":`${p.stock}개`}</strong></div>)}</div>}<div style={{display:"flex",flexDirection:"column",gap:8}}>{products.filter(p=>p.active).sort((a,b)=>(a.nameKo||"").localeCompare(b.nameKo||"")).map(p=><div key={p.id} style={{background:"#FFF",borderRadius:12,padding:"12px 16px",border:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12}}><div style={{flexShrink:0,width:36,height:36,borderRadius:6,overflow:"hidden",background:"#F0EDE8",display:"flex",alignItems:"center",justifyContent:"center"}}>{p.media?.length>0&&p.media[0].url?<img src={p.media[0].url} alt="" style={{width:"100%",height:"100%",objectFit:"contain"}} loading="lazy"/>:<span style={{fontSize:18}}>{p.image||"📦"}</span>}</div><div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nameKo}</div><div style={{fontSize:11,color:C.tLight}}>{categories[p.category]||p.category} · ${(p.sale?p.salePrice:p.price||0).toFixed(2)}</div></div><span style={{fontWeight:700,padding:"3px 10px",borderRadius:6,fontSize:12,background:p.stock===0?C.dLight:p.stock<=5?C.wLight:C.pLight,color:p.stock===0?C.danger:p.stock<=5?C.warn:C.primary,flexShrink:0}}>{p.stock}</span><div style={{display:"flex",gap:4,alignItems:"center",flexShrink:0}}><button onClick={()=>handleStockChange(p.id,p.stock-1)} style={{...BTNS,padding:"6px 10px",background:C.tLight}}>−</button><input value={p.stock} onChange={e=>handleStockChange(p.id,parseInt(e.target.value)||0)} style={{width:44,textAlign:"center",border:`1px solid ${C.border}`,borderRadius:6,padding:4,fontSize:13,fontFamily:"'DM Sans',sans-serif"}}/><button onClick={()=>handleStockChange(p.id,p.stock+1)} style={{...BTNS,padding:"6px 10px"}}>+</button></div></div>)}</div></div>}
+        {loaded&&tab==="inventory"&&(()=>{
+          const iBase=products.filter(p=>{
+            if(!p.active)return false;
+            if(iCatFilter!=="all"&&p.category!==iCatFilter)return false;
+            if(!iSearch)return true;
+            const q=iSearch.toLowerCase();
+            return(p.nameKo||"").toLowerCase().includes(q)||(p.nameEn||"").toLowerCase().includes(q)||(p.brand||"").toLowerCase().includes(q);
+          });
+          const iSorted=[...iBase].sort((a,b)=>{
+            if(iSort==="name")return(a.nameKo||"").localeCompare(b.nameKo||"");
+            if(iSort==="price")return(a.sale?a.salePrice:a.price)-(b.sale?b.salePrice:b.price);
+            if(iSort==="priceDesc")return(b.sale?b.salePrice:b.price)-(a.sale?a.salePrice:a.price);
+            if(iSort==="stock")return a.stock-b.stock;
+            if(iSort==="stockDesc")return b.stock-a.stock;
+            return 0;
+          });
+          return <div><h2 style={{fontFamily:"'DM Serif Display',serif",fontSize:24,marginBottom:12}}>📋 재고 관리</h2>
+          <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap",alignItems:"center"}}>
+            <input value={iSearch} onChange={e=>setISearch(e.target.value)} placeholder="제품명, 브랜드 검색..." style={{...INP,maxWidth:220,padding:"8px 12px",fontSize:12}}/>
+            <select value={iCatFilter} onChange={e=>setICatFilter(e.target.value)} style={{...INP,maxWidth:150,padding:"8px 12px",fontSize:12}}>
+              <option value="all">전체 카테고리</option>
+              {Object.entries(categories).map(([id,name])=><option key={id} value={id}>{name}</option>)}
+            </select>
+            <select value={iSort} onChange={e=>setISort(e.target.value)} style={{...INP,maxWidth:150,padding:"8px 12px",fontSize:12}}>
+              <option value="name">이름순</option>
+              <option value="stock">재고 적은순</option>
+              <option value="stockDesc">재고 많은순</option>
+              <option value="price">가격 낮은순</option>
+              <option value="priceDesc">가격 높은순</option>
+            </select>
+            <span style={{fontSize:11,color:C.tLight}}>{iSorted.length}개 제품</span>
+          </div>
+          {products.filter(p=>p.stock<=5&&p.active).length>0&&<div style={{background:C.wLight,border:`1px solid ${C.warn}33`,borderRadius:12,padding:"14px 16px",marginBottom:16}}><div style={{fontWeight:700,fontSize:13,color:C.warn,marginBottom:6}}>⚠️ 재고 부족 / 품절</div>{products.filter(p=>p.stock<=5&&p.active).map(p=><div key={p.id} style={{fontSize:12,padding:"2px 0"}}>{p.image||"📦"} {p.nameKo} — <strong style={{color:p.stock===0?C.danger:C.warn}}>{p.stock===0?"품절":`${p.stock}개`}</strong></div>)}</div>}
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>{iSorted.map(p=><div key={p.id} style={{background:"#FFF",borderRadius:12,padding:"12px 16px",border:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12}}><div style={{flexShrink:0,width:36,height:36,borderRadius:6,overflow:"hidden",background:"#F0EDE8",display:"flex",alignItems:"center",justifyContent:"center"}}>{p.media?.length>0&&p.media[0].url?<img src={p.media[0].url} alt="" style={{width:"100%",height:"100%",objectFit:"contain"}} loading="lazy"/>:<span style={{fontSize:18}}>{p.image||"📦"}</span>}</div><div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.brand&&<span style={{fontSize:10,color:C.accent,fontWeight:600,marginRight:4}}>{p.brand}</span>}{p.nameKo}</div><div style={{fontSize:11,color:C.tLight}}>{categories[p.category]||p.category} · ${(p.sale?p.salePrice:p.price||0).toFixed(2)}</div></div><span style={{fontWeight:700,padding:"3px 10px",borderRadius:6,fontSize:12,background:p.stock===0?C.dLight:p.stock<=5?C.wLight:C.pLight,color:p.stock===0?C.danger:p.stock<=5?C.warn:C.primary,flexShrink:0}}>{p.stock}</span><div style={{display:"flex",gap:4,alignItems:"center",flexShrink:0}}><button onClick={()=>handleStockChange(p.id,p.stock-1)} style={{...BTNS,padding:"6px 10px",background:C.tLight}}>−</button><input value={p.stock} onChange={e=>handleStockChange(p.id,parseInt(e.target.value)||0)} style={{width:44,textAlign:"center",border:`1px solid ${C.border}`,borderRadius:6,padding:4,fontSize:13,fontFamily:"'DM Sans',sans-serif"}}/><button onClick={()=>handleStockChange(p.id,p.stock+1)} style={{...BTNS,padding:"6px 10px"}}>+</button></div></div>)}</div></div>;
+        })()}
       </div>
     </div>
   );

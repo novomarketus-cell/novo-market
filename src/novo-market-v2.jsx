@@ -301,9 +301,12 @@ export default function NovoMarket() {
   const filtered = useMemo(() => activeProducts.filter(p => {
     if (cat !== "all" && p.category !== cat) return false;
     if (brandFilter !== "all" && p.brand !== brandFilter) return false;
-    const n = lang === "en" ? (p.nameEn || "") : (p.nameKo || "");
-    return !search || n.toLowerCase().includes(search.toLowerCase());
-  }), [cat, brandFilter, search, lang, activeProducts]);
+    if (!search) return true;
+    const q = search.toLowerCase();
+    const fields = [p.nameKo, p.nameEn, p.brand, p.descKo, p.descEn, categories[p.category]?.nameKo || categories[p.category] || p.category].filter(Boolean);
+    if (p.tags) fields.push(...p.tags.map(t => t.label));
+    return fields.some(f => String(f).toLowerCase().includes(q));
+  }), [cat, brandFilter, search, lang, activeProducts, categories]);
 
   const handleInfoChange = (key, val) => {
     if (key === "phone") setInfo(p => ({ ...p, phone: formatPhone(val) }));
@@ -561,7 +564,7 @@ export default function NovoMarket() {
       <div style={{ background: "#FFF3E0", borderRadius: 10, padding: "10px 14px", marginBottom: 12, fontSize: 12, color: "#E67E22", fontWeight: 700 }}>📦 {t.addMoreItems} — {addingToOrder.orderNum}</div>
       <div style={{ background: C.wh, borderRadius: 10, border: `1px solid ${C.bdr}`, padding: "9px 12px", display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}><span>🔍</span><input value={search} onChange={e => setSearch(e.target.value)} placeholder={t.search} style={{ border: "none", outline: "none", flex: 1, fontSize: 13, fontFamily: "'Nunito',sans-serif", background: "transparent" }} /></div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        {activeProducts.filter(p => p.stock > 0 && (!search || pName(p).toLowerCase().includes(search.toLowerCase()))).map(p => {
+        {activeProducts.filter(p => p.stock > 0 && (!search || [p.nameKo,p.nameEn,p.brand,...(p.tags||[]).map(t=>t.label)].filter(Boolean).some(f=>f.toLowerCase().includes(search.toLowerCase())))).map(p => {
           const nm = pName(p); const pr = basePrice(p); const hasImg = p.media && p.media.length > 0 && p.media[0].url;
           return <div key={p.id} style={{ background: C.card, borderRadius: 12, overflow: "hidden", border: `1px solid ${C.bdr}`, display: "flex", flexDirection: "column" }}>
             <div style={{ height: 120, background: "#F5F2ED", flexShrink: 0 }}>{hasImg ? <LazyImg src={p.media[0].url} alt={nm} style={{ width: "100%", height: 120 }} /> : <div style={{ height: 120, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40 }}>{p.image || "📦"}</div>}</div>
