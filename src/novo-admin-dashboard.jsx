@@ -181,6 +181,7 @@ function AdminDashboard() {
   const [showPrF,setShowPrF]=useState(false);const [editPrCode,setEditPrCode]=useState(null);const [showCatF,setShowCatF]=useState(false);const [catForm,setCatForm]=useState({id:"",nameKo:"",nameEn:""});const [editCatId,setEditCatId]=useState(null);
   const [oFilter,setOFilter]=useState("all");const [search,setSearch]=useState("");const [notif,setNotif]=useState("");const [prf,setPrf]=useState({code:"",type:"percent",value:0,minOrder:0,active:true});
   const trackingTimers=useRef({});const stockTimers=useRef({});
+  const [dragIdx,setDragIdx]=useState(null);const [dragOverIdx,setDragOverIdx]=useState(null);
 
   useEffect(()=>{
     const unsubs=[];
@@ -226,32 +227,57 @@ function AdminDashboard() {
 
         {loaded&&tab==="products"&&(()=>{
           const sorted=[...products].sort((a,b)=>{const ao=typeof a.order==="number"?a.order:9999;const bo=typeof b.order==="number"?b.order:9999;return ao!==bo?ao-bo:(a.nameKo||"").localeCompare(b.nameKo||"");});
-          const moveProduct=async(fromIdx,toIdx)=>{
-            if(toIdx<0||toIdx>=sorted.length)return;
-            const next=[...sorted];const[moved]=next.splice(fromIdx,1);next.splice(toIdx,0,moved);
-            const diff=toIdx-fromIdx;
-            const dir=diff===-1?"◀ 왼쪽":diff===1?"▶ 오른쪽":diff<-1?"▲ 위로":"▼ 아래로";
-            try{await reorderProducts(next.map(p=>p.id));noti(`${moved.nameKo} → ${dir} 이동 (#${toIdx+1})`);}catch{noti("순서 변경 실패");}
+          const handleDrop=async(e,targetIdx)=>{
+            e.preventDefault();
+            if(dragIdx===null||dragIdx===targetIdx){setDragIdx(null);setDragOverIdx(null);return;}
+            const next=[...sorted];const[moved]=next.splice(dragIdx,1);next.splice(targetIdx,0,moved);
+            setDragIdx(null);setDragOverIdx(null);
+            try{await reorderProducts(next.map(p=>p.id));noti(`${moved.nameKo}: #${dragIdx+1} → #${targetIdx+1}`);}catch{noti("순서 변경 실패");}
           };
-          // Detect grid columns for up/down movement
-          const gridRef=document.querySelector('[data-novo-product-grid]');
-          const cols=gridRef?Math.round(gridRef.offsetWidth/Math.max(gridRef.querySelector(':scope > div')?.offsetWidth||280,1)):3;
+          // direction indicator
+          const getDir=(from,to)=>{
+            if(from===null||to===null||from===to)return null;
+            const diff=to-from;
+            return diff<0?"⬆ 여기 위로":"⬇ 여기 아래로";
+          };
           return <div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
               <h2 style={{fontFamily:"'DM Serif Display',serif",fontSize:24,margin:0}}>🏷️ 제품 관리</h2>
               <button onClick={()=>openProductForm(null)} style={BTN}>+ 제품 추가</button>
             </div>
             <div style={{fontSize:11,color:C.tLight,marginBottom:12,padding:"8px 12px",background:"#F8F9FA",borderRadius:8,border:`1px dashed ${C.border}`}}>
-              💡 화살표 버튼으로 제품 순서를 변경하세요 (◀▶ 좌우, ▲▼ 위아래). 고객 사이트에 즉시 반영됩니다.
+              💡 제품 카드를 드래그해서 순서를 변경하세요. 놓을 위치에 방향 표시가 나타납니다. 변경 즉시 고객 사이트에 반영됩니다.
             </div>
-            <div data-novo-product-grid="" style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:12}}>
-              {sorted.map((p,idx)=><div key={p.id} style={{background:"#FFF",borderRadius:12,padding:16,border:`1px solid ${C.border}`,opacity:p.active?1:0.5,position:"relative"}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:12}}>
+              {sorted.map((p,idx)=><div key={p.id}
+                draggable
+                onDragStart={()=>setDragIdx(idx)}
+                onDragOver={e=>{e.preventDefault();if(dragOverIdx!==idx)setDragOverIdx(idx);}}
+                onDragLeave={()=>{if(dragOverIdx===idx)setDragOverIdx(null);}}
+                onDrop={e=>handleDrop(e,idx)}
+                onDragEnd={()=>{setDragIdx(null);setDragOverIdx(null);}}
+                onTouchStart={e=>{setDragIdx(idx);}}
+                onTouchEnd={()=>{if(dragIdx!==null&&dragOverIdx!==null&&dragIdx!==dragOverIdx){const fakeE={preventDefault:()=>{}};handleDrop(fakeE,dragOverIdx);}else{setDragIdx(null);setDragOverIdx(null);}}}
+                style={{
+                  background:dragIdx===idx?"#E8F0EB":dragOverIdx===idx&&dragIdx!==null?"#FFF3EB":"#FFF",
+                  borderRadius:12,padding:16,
+                  border:dragOverIdx===idx&&dragIdx!==null?`2px solid ${C.accent}`:`1px solid ${C.border}`,
+                  opacity:dragIdx===idx?0.5:p.active?1:0.5,
+                  position:"relative",cursor:"grab",
+                  transition:"border-color 0.15s, background 0.15s, opacity 0.15s, transform 0.15s",
+                  transform:dragOverIdx===idx&&dragIdx!==null?"scale(1.02)":"scale(1)",
+                  userSelect:"none",
+                }}>
                 {/* Position badge */}
                 <div style={{position:"absolute",top:8,left:8,background:C.primary,color:"#FFF",fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:10,zIndex:1}}>#{idx+1}</div>
-                {!p.active&&<div style={{position:"absolute",top:8,right:8,fontSize:10,background:"#EEE",padding:"2px 6px",borderRadius:4,color:"#999"}}>비활성</div>}
+                {/* Drop direction indicator */}
+                {dragOverIdx===idx&&dragIdx!==null&&dragIdx!==idx&&<div style={{position:"absolute",top:8,right:8,background:C.accent,color:"#FFF",fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:8,zIndex:2,animation:"si .2s ease"}}>{getDir(dragIdx,idx)}</div>}
+                {/* Drag being dragged indicator */}
+                {dragIdx===idx&&<div style={{position:"absolute",top:8,right:8,background:C.primary,color:"#FFF",fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:8,zIndex:2}}>✊ 드래그 중</div>}
+                {!p.active&&dragIdx!==idx&&!(dragOverIdx===idx&&dragIdx!==null)&&<div style={{position:"absolute",top:8,right:8,fontSize:10,background:"#EEE",padding:"2px 6px",borderRadius:4,color:"#999"}}>비활성</div>}
                 <div style={{display:"flex",gap:12,marginTop:4}}>
                   <div style={{width:60,height:60,borderRadius:8,overflow:"hidden",flexShrink:0,background:"#F0EDE8",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                    {p.media?.length>0&&p.media[0].url?<img src={p.media[0].url} alt="" style={{width:"100%",height:"100%",objectFit:"contain"}} loading="lazy"/>:<span style={{fontSize:30}}>{p.image||"📦"}</span>}
+                    {p.media?.length>0&&p.media[0].url?<img src={p.media[0].url} alt="" style={{width:"100%",height:"100%",objectFit:"contain"}} loading="lazy" draggable={false}/>:<span style={{fontSize:30}}>{p.image||"📦"}</span>}
                   </div>
                   <div style={{flex:1}}>
                     <div style={{fontSize:13,fontWeight:700,marginBottom:2}}>{p.brand&&<span style={{fontSize:10,color:C.accent,fontWeight:600,marginRight:4}}>{p.brand}</span>}{p.nameKo}</div>
@@ -264,17 +290,9 @@ function AdminDashboard() {
                     {p.tags?.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:3,marginTop:4}}>{p.tags.map((tag,i)=><span key={i} style={{fontSize:9,fontWeight:600,padding:"2px 6px",borderRadius:10,background:tag.color||"#EEE",color:tag.textColor||"#555"}}>{tag.label}</span>)}</div>}
                   </div>
                 </div>
-                {/* Reorder arrows */}
-                <div style={{display:"flex",gap:4,marginTop:10,alignItems:"center",justifyContent:"center",borderTop:`1px solid ${C.border}`,paddingTop:10}}>
-                  <button disabled={idx===0} onClick={()=>moveProduct(idx,idx-1)} title="◀ 왼쪽으로" style={{...BTNS,padding:"5px 10px",background:idx===0?"#DDD":C.primary,cursor:idx===0?"default":"pointer",fontSize:14,lineHeight:1}}>◀</button>
-                  <button disabled={idx<cols} onClick={()=>moveProduct(idx,idx-cols)} title="▲ 위로" style={{...BTNS,padding:"5px 10px",background:idx<cols?"#DDD":"#2980B9",cursor:idx<cols?"default":"pointer",fontSize:14,lineHeight:1}}>▲</button>
-                  <button disabled={idx>=sorted.length-cols} onClick={()=>moveProduct(idx,idx+cols)} title="▼ 아래로" style={{...BTNS,padding:"5px 10px",background:idx>=sorted.length-cols?"#DDD":"#2980B9",cursor:idx>=sorted.length-cols?"default":"pointer",fontSize:14,lineHeight:1}}>▼</button>
-                  <button disabled={idx===sorted.length-1} onClick={()=>moveProduct(idx,idx+1)} title="▶ 오른쪽으로" style={{...BTNS,padding:"5px 10px",background:idx===sorted.length-1?"#DDD":C.primary,cursor:idx===sorted.length-1?"default":"pointer",fontSize:14,lineHeight:1}}>▶</button>
-                </div>
-                {/* Edit/Delete buttons */}
-                <div style={{display:"flex",gap:6,marginTop:8,justifyContent:"flex-end"}}>
-                  <button onClick={()=>openProductForm(p)} style={{...BTNS,background:"#3498DB"}}>✏️ 수정</button>
-                  <button onClick={()=>handleDeleteProduct(p.id)} style={{...BTNS,background:C.danger}}>🗑 삭제</button>
+                <div style={{display:"flex",gap:6,marginTop:10,justifyContent:"flex-end"}}>
+                  <button onClick={()=>openProductForm(p)} onMouseDown={e=>e.stopPropagation()} style={{...BTNS,background:"#3498DB"}}>✏️ 수정</button>
+                  <button onClick={()=>handleDeleteProduct(p.id)} onMouseDown={e=>e.stopPropagation()} style={{...BTNS,background:C.danger}}>🗑 삭제</button>
                 </div>
               </div>)}
             </div>
