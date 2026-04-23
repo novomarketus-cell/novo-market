@@ -292,8 +292,8 @@ export default function NovoMarket() {
   })), [categories]);
   const brandList = useMemo(() => [...new Set(activeProducts.map(p => p.brand).filter(Boolean))].sort(), [activeProducts]);
 
-  const addToCart = (p, variant) => { if (p.stock <= 0) { setToast(lang === "ko" ? "품절된 상품입니다" : "Out of stock"); return; } const cartId = variant ? `${p.id}__${variant.label}` : p.id; setCart(prev => { const ex = prev.find(c => c.id === cartId); if (ex) { if (ex.qty >= p.stock) return prev; return prev.map(c => c.id === cartId ? { ...c, qty: c.qty + 1 } : c); } const item = { ...p, id: cartId, productId: p.id, qty: 1 }; if (variant) { item.variant = variant.label; item.price = Number(variant.price); if (p.sale) item.salePrice = Number(variant.salePrice || variant.price); } return [...prev, item]; }); setToast(t.added); };
-  const updQty = (id, d) => setCart(prev => prev.map(c => { if (c.id !== id) return c; const pid = c.productId || id; const product = products.find(p => p.id === pid); const maxQty = product?.stock || 99; return { ...c, qty: Math.max(1, Math.min(c.qty + d, maxQty)) }; }));
+  const addToCart = (p, variant) => { const avail = variant ? (variant.stock ?? p.stock) : p.stock; if (avail <= 0) { setToast(lang === "ko" ? "품절된 상품입니다" : "Out of stock"); return; } const cartId = variant ? `${p.id}__${variant.label}` : p.id; setCart(prev => { const ex = prev.find(c => c.id === cartId); if (ex) { if (ex.qty >= avail) return prev; return prev.map(c => c.id === cartId ? { ...c, qty: c.qty + 1 } : c); } const item = { ...p, id: cartId, productId: p.id, qty: 1 }; if (variant) { item.variant = variant.label; item.price = Number(variant.price); if (p.sale) item.salePrice = Number(variant.salePrice || variant.price); } return [...prev, item]; }); setToast(t.added); };
+  const updQty = (id, d) => setCart(prev => prev.map(c => { if (c.id !== id) return c; const pid = c.productId || id; const product = products.find(p => p.id === pid); let maxQty = product?.stock || 99; if (c.variant && product?.variants) { const v = product.variants.find(v2 => v2.label === c.variant); if (v) maxQty = v.stock ?? maxQty; } return { ...c, qty: Math.max(1, Math.min(c.qty + d, maxQty)) }; }));
   const rmItem = id => setCart(prev => prev.filter(c => c.id !== id));
 
   const subtotal = useMemo(() => cart.reduce((s, item) => s + (Math.round(tieredPrice(item, item.qty) * 100) * item.qty) / 100, 0), [cart]);
@@ -413,7 +413,13 @@ export default function NovoMarket() {
     for (const item of orderItems) {
       const product = products.find(p => p.id === item.id);
       if (!product) { issues.push({ name: item.name, issue: t.outOfStock }); continue; }
-      if (product.stock < item.qty) { issues.push({ name: item.name, issue: `${t.stockNotEnough} (${product.stock} left)` }); }
+      if (item.variant && product.variants) {
+        const v = product.variants.find(v2 => v2.label === item.variant);
+        if (!v) { issues.push({ name: item.name, issue: t.outOfStock }); continue; }
+        if ((v.stock ?? 0) < item.qty) { issues.push({ name: item.name, issue: `${t.stockNotEnough} (${v.stock || 0} left)` }); }
+      } else {
+        if (product.stock < item.qty) { issues.push({ name: item.name, issue: `${t.stockNotEnough} (${product.stock} left)` }); }
+      }
     }
     return issues.length > 0 ? issues : null;
   };
@@ -435,7 +441,7 @@ export default function NovoMarket() {
       if (issues) { setStockError(issues); return; }
 
       // Deduct stock atomically (prevents race conditions)
-      try { await deductStockTransaction(items.map(it => ({ id: it.id, qty: it.qty, name: it.name }))); } catch (e) { console.error("Stock deduction failed:", e); setStockError(typeof e === "string" ? e : (lang === "ko" ? "재고 차감 실패. 다시 시도해주세요." : "Stock deduction failed. Please try again.")); setIsPaying(false); return; }
+      try { await deductStockTransaction(items.map(it => ({ id: it.id, qty: it.qty, name: it.name, ...(it.variant ? { variant: it.variant } : {}) }))); } catch (e) { console.error("Stock deduction failed:", e); setStockError(typeof e === "string" ? e : (lang === "ko" ? "재고 차감 실패. 다시 시도해주세요." : "Stock deduction failed. Please try again.")); setIsPaying(false); return; }
     }
 
     // Update status + payment info + stockDeducted flag
@@ -634,7 +640,7 @@ export default function NovoMarket() {
           {p.variants && p.variants.length > 0 && <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: C.mid, marginBottom: 6 }}>{lang === "ko" ? "옵션 선택" : "Select Option"}</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {p.variants.map((v, i) => { const active = selVariant?.label === v.label; return <button key={i} onClick={() => setSelVariant(v)} style={{ ...B, padding: "10px 18px", fontSize: 13, background: active ? C.pri : "#FFF", color: active ? "#FFF" : C.txt, border: `2px solid ${active ? C.pri : C.bdr}`, borderRadius: 10, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, minWidth: 90 }}><span style={{ fontWeight: 700 }}>{v.label}</span><span style={{ fontSize: 12, fontWeight: 800 }}>{fmt(Number(v.price))}</span></button>; })}
+              {p.variants.map((v, i) => { const active = selVariant?.label === v.label; const vSold = (v.stock ?? 0) <= 0; return <button key={i} onClick={() => !vSold && setSelVariant(v)} disabled={vSold} style={{ ...B, padding: "10px 18px", fontSize: 13, background: vSold ? "#F5F5F5" : active ? C.pri : "#FFF", color: vSold ? "#AAA" : active ? "#FFF" : C.txt, border: `2px solid ${vSold ? "#DDD" : active ? C.pri : C.bdr}`, borderRadius: 10, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, minWidth: 90, opacity: vSold ? 0.6 : 1 }}><span style={{ fontWeight: 700 }}>{v.label}</span><span style={{ fontSize: 12, fontWeight: 800 }}>{vSold ? (lang === "ko" ? "품절" : "Sold out") : fmt(Number(v.price))}</span></button>; })}
             </div>
           </div>}
           {(() => { const vp = selVariant ? Number(selVariant.price) : bp; const origP = selVariant ? Number(selVariant.origPrice || p.price) : p.price; const isSale = selVariant ? (selVariant.origPrice && Number(selVariant.price) < Number(selVariant.origPrice)) : p.sale; return <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 12, padding: "12px 0", borderTop: `1px solid ${C.bdr}`, borderBottom: `1px solid ${C.bdr}` }}><span style={{ fontSize: 28, fontWeight: 900, color: isSale ? C.danger : C.pri }}>{fmt(vp)}</span>{isSale && <span style={{ fontSize: 15, textDecoration: "line-through", color: C.light }}>{fmt(origP)}</span>}</div>; })()}
@@ -648,13 +654,13 @@ export default function NovoMarket() {
             {ic && <div style={{ fontSize: 11, color: C.pri, fontWeight: 600, marginTop: 6, textAlign: "center" }}>✓ {t.cur}: {fmt(tp)}/{t.ea}</div>}
           </div>}
           <div style={{ fontSize: 14, lineHeight: 1.7, color: C.mid, margin: "0 0 20px" }}>{renderDesc(dc)}</div>
-          {(() => { const hasVars = p.variants && p.variants.length > 0; const needsVariant = hasVars && !selVariant; const cartId = selVariant ? `${p.id}__${selVariant.label}` : p.id; const ic2 = cart.find(c => c.id === cartId);
-            return p.stock === 0 ? <div style={{ ...B, width: "100%", padding: 14, fontSize: 15, textAlign: "center", background: "#CCC", color: "#FFF", borderRadius: 12 }}>{t.sold}</div>
+          {(() => { const hasVars = p.variants && p.variants.length > 0; const needsVariant = hasVars && !selVariant; const cartId = selVariant ? `${p.id}__${selVariant.label}` : p.id; const ic2 = cart.find(c => c.id === cartId); const availStock = selVariant ? (selVariant.stock ?? p.stock) : (hasVars ? null : p.stock); const isSoldOut = hasVars ? (selVariant ? (selVariant.stock ?? 0) <= 0 : false) : p.stock === 0;
+            return isSoldOut ? <div style={{ ...B, width: "100%", padding: 14, fontSize: 15, textAlign: "center", background: "#CCC", color: "#FFF", borderRadius: 12 }}>{t.sold}</div>
             : <div style={{ display: "flex", gap: 10 }}>
               {ic2 && <div style={{ display: "flex", alignItems: "center", gap: 0, background: "#FFF", borderRadius: 12, border: `2px solid ${C.pri}`, overflow: "hidden" }}><button onClick={() => updQty(cartId, -1)} style={{ ...B, background: "none", color: C.pri, fontSize: 20, padding: "8px 14px", borderRadius: 0 }}>−</button><span style={{ fontWeight: 800, fontSize: 16, minWidth: 28, textAlign: "center", color: C.pri }}>{ic2.qty}</span><button onClick={() => updQty(cartId, 1)} style={{ ...B, background: "none", color: C.pri, fontSize: 20, padding: "8px 14px", borderRadius: 0 }}>+</button></div>}
               <button onClick={() => { if (needsVariant) { setToast(lang === "ko" ? "옵션을 선택해주세요" : "Please select an option"); return; } addToCart(p, selVariant); }} style={{ ...B, flex: 1, padding: 14, fontSize: 15, background: needsVariant ? "#CCC" : C.pri, color: "#FFF", borderRadius: 12, boxShadow: needsVariant ? "none" : "0 3px 12px rgba(91,154,139,.3)" }}>{needsVariant ? (lang === "ko" ? "옵션을 선택해주세요" : "Select an option") : ic2 ? `✓ ${t.add}` : t.add}</button>
             </div>; })()}
-          {p.stock > 0 && p.stock <= 10 && <div style={{ marginTop: 10, fontSize: 12, color: "#E67E22", fontWeight: 600 }}>⚡ {lang === "en" ? `Only ${p.stock} left!` : `${p.stock}개 남음!`}</div>}
+          {(() => { const stk = selVariant ? (selVariant.stock ?? p.stock) : p.stock; return stk > 0 && stk <= 10 ? <div style={{ marginTop: 10, fontSize: 12, color: "#E67E22", fontWeight: 600 }}>⚡ {lang === "en" ? `Only ${stk} left!` : `${stk}개 남음!`}</div> : null; })()}
         </div>
       </div>;
     })()}
@@ -689,7 +695,7 @@ export default function NovoMarket() {
       <div style={{ background: "linear-gradient(135deg, #FFF0F3, #FFECD2)", borderRadius: 12, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: C.acc, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>🚚 {t.freeNote}</div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(155px, 1fr))", gap: 12 }}>
         {filtered.map(p => {
-          const nm = pName(p); const pr = basePrice(p); const so = p.stock === 0; const hasImg = p.media && p.media.length > 0 && p.media[0].url;
+          const nm = pName(p); const pr = basePrice(p); const hasVars = p.variants && p.variants.length > 0; const so = hasVars ? p.variants.every(v => (v.stock ?? 0) <= 0) : p.stock === 0; const hasImg = p.media && p.media.length > 0 && p.media[0].url;
           return <div key={p.id} className="novo-card" onClick={() => setSelProd(p.id)} style={{ background: "#FFF", borderRadius: 16, overflow: "hidden", position: "relative", cursor: "pointer", opacity: so ? .55 : 1, boxShadow: "0 2px 12px rgba(0,0,0,.06)", display: "flex", flexDirection: "column", transition: "transform .2s, box-shadow .2s" }}>
             {p.sale && !so && <div style={{ position: "absolute", top: 8, left: 8, background: "linear-gradient(135deg, #E85D5D, #E8879A)", color: "#FFF", fontSize: 10, fontWeight: 800, padding: "3px 10px", borderRadius: 20, zIndex: 2 }}>{Math.round((1 - p.salePrice / p.price) * 100)}%</div>}
             {so && <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", background: "rgba(0,0,0,.6)", color: "#FFF", fontSize: 11, fontWeight: 800, padding: "6px 20px", borderRadius: 20, zIndex: 2, backdropFilter: "blur(2px)" }}>{t.sold}</div>}
@@ -704,7 +710,7 @@ export default function NovoMarket() {
                 {p.tiered && p.tiered.length > 0 && <div style={{ fontSize: 9, color: C.pri, fontWeight: 700, background: C.priL, padding: "3px 8px", borderRadius: 8, display: "inline-block" }}>📦 {p.tiered[0].qty}+ {fmt(Number(p.tiered[0].price))}</div>}
                 {p.tags && p.tags.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginTop: 3 }}>{p.tags.slice(0, 2).map((tag, i) => <span key={i} style={{ fontSize: 9, fontWeight: 600, padding: "2px 6px", borderRadius: 10, background: tag.color || "#F5F5F5", color: tag.textColor || "#666" }}>{tag.label}</span>)}{p.tags.length > 2 && <span style={{ fontSize: 9, color: C.light }}>+{p.tags.length - 2}</span>}</div>}
               </div>
-              <button onClick={e => { e.stopPropagation(); if (!so) addToCart(p); }} disabled={so} style={{ ...B, width: "100%", padding: "8px 0", fontSize: 12, background: so ? "#DDD" : C.pri, color: "#FFF", marginTop: "auto", borderRadius: 10, boxShadow: so ? "none" : "0 2px 8px rgba(91,154,139,.25)" }}>{so ? t.sold : t.add}</button>
+              <button onClick={e => { e.stopPropagation(); if (so) return; if (hasVars) { setSelProd(p.id); setSelVariant(null); } else addToCart(p); }} disabled={so} style={{ ...B, width: "100%", padding: "8px 0", fontSize: 12, background: so ? "#DDD" : C.pri, color: "#FFF", marginTop: "auto", borderRadius: 10, boxShadow: so ? "none" : "0 2px 8px rgba(91,154,139,.25)" }}>{so ? t.sold : hasVars ? (lang === "ko" ? "옵션 선택" : "Select Option") : t.add}</button>
             </div>
           </div>;
         })}
