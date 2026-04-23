@@ -266,6 +266,7 @@ export default function NovoMarket() {
   const [stockError, setStockError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPaying, setIsPaying] = useState(false);
+  const [selVariant, setSelVariant] = useState(null);
   const [deliveryMethod, setDeliveryMethod] = useState("delivery"); // "delivery" | "irvine" | "buena_park"
 
   const [products, setProducts] = useState([]);
@@ -291,8 +292,8 @@ export default function NovoMarket() {
   })), [categories]);
   const brandList = useMemo(() => [...new Set(activeProducts.map(p => p.brand).filter(Boolean))].sort(), [activeProducts]);
 
-  const addToCart = p => { if (p.stock <= 0) { setToast(lang === "ko" ? "품절된 상품입니다" : "Out of stock"); return; } setCart(prev => { const ex = prev.find(c => c.id === p.id); if (ex) { if (ex.qty >= p.stock) return prev; return prev.map(c => c.id === p.id ? { ...c, qty: c.qty + 1 } : c); } return [...prev, { ...p, qty: 1 }]; }); setToast(t.added); };
-  const updQty = (id, d) => setCart(prev => prev.map(c => { if (c.id !== id) return c; const product = products.find(p => p.id === id); const maxQty = product?.stock || 99; return { ...c, qty: Math.max(1, Math.min(c.qty + d, maxQty)) }; }));
+  const addToCart = (p, variant) => { if (p.stock <= 0) { setToast(lang === "ko" ? "품절된 상품입니다" : "Out of stock"); return; } const cartId = variant ? `${p.id}__${variant.label}` : p.id; setCart(prev => { const ex = prev.find(c => c.id === cartId); if (ex) { if (ex.qty >= p.stock) return prev; return prev.map(c => c.id === cartId ? { ...c, qty: c.qty + 1 } : c); } const item = { ...p, id: cartId, productId: p.id, qty: 1 }; if (variant) { item.variant = variant.label; item.price = Number(variant.price); if (p.sale) item.salePrice = Number(variant.salePrice || variant.price); } return [...prev, item]; }); setToast(t.added); };
+  const updQty = (id, d) => setCart(prev => prev.map(c => { if (c.id !== id) return c; const pid = c.productId || id; const product = products.find(p => p.id === pid); const maxQty = product?.stock || 99; return { ...c, qty: Math.max(1, Math.min(c.qty + d, maxQty)) }; }));
   const rmItem = id => setCart(prev => prev.filter(c => c.id !== id));
 
   const subtotal = useMemo(() => cart.reduce((s, item) => s + (Math.round(tieredPrice(item, item.qty) * 100) * item.qty) / 100, 0), [cart]);
@@ -368,10 +369,19 @@ export default function NovoMarket() {
 
     // Recalculate prices from product DB (prevents client-side price manipulation)
     const verifiedItems = cart.map(item => {
-      const dbProduct = products.find(p => p.id === item.id);
+      const pid = item.productId || item.id;
+      const dbProduct = products.find(p => p.id === pid);
       if (!dbProduct) return null;
-      const verifiedPrice = tieredPrice(dbProduct, item.qty);
-      return { id: item.id, name: lang === "en" ? (dbProduct.nameEn || "") : (dbProduct.nameKo || ""), price: verifiedPrice, qty: item.qty };
+      // If variant, use variant price; otherwise use tiered/base price
+      let verifiedPrice;
+      if (item.variant && dbProduct.variants) {
+        const dbVariant = dbProduct.variants.find(v => v.label === item.variant);
+        verifiedPrice = dbVariant ? Number(dbVariant.price) : tieredPrice(dbProduct, item.qty);
+      } else {
+        verifiedPrice = tieredPrice(dbProduct, item.qty);
+      }
+      const nm = lang === "en" ? (dbProduct.nameEn || "") : (dbProduct.nameKo || "");
+      return { id: pid, name: item.variant ? `${nm} (${item.variant})` : nm, price: verifiedPrice, qty: item.qty, ...(item.variant ? { variant: item.variant } : {}) };
     }).filter(Boolean);
     if (verifiedItems.length === 0) { setToast(lang === "ko" ? "유효한 상품이 없습니다" : "No valid products in cart"); return; }
     setIsSubmitting(true);
@@ -614,14 +624,20 @@ export default function NovoMarket() {
       const nm = pName(p); const dc = pDesc(p); const bp = basePrice(p);
       const ic = cart.find(c => c.id === p.id); const tp = ic ? tieredPrice(p, ic.qty) : bp;
       return <div style={{ padding: 16, paddingBottom: 100, animation: "fadeUp .3s ease" }}>
-        <button onClick={() => setSelProd(null)} style={{ ...B, background: "none", color: C.pri, padding: "4px 0 14px", fontSize: 14, display: "flex", alignItems: "center", gap: 4 }}>← {t.back}</button>
+        <button onClick={() => { setSelProd(null); setSelVariant(null); }} style={{ ...B, background: "none", color: C.pri, padding: "4px 0 14px", fontSize: 14, display: "flex", alignItems: "center", gap: 4 }}>← {t.back}</button>
         <Gallery media={p.media} emoji={p.image} name={nm} />
         <div style={{ marginTop: 16 }}>
           {p.sale && <span style={{ background: "linear-gradient(135deg, #E85D5D, #E8879A)", color: "#FFF", fontSize: 11, fontWeight: 700, padding: "4px 12px", borderRadius: 20, marginBottom: 8, display: "inline-block" }}>{Math.round((1 - p.salePrice / p.price) * 100)}% {t.off}</span>}
           {p.brand && <div style={{ fontSize: 12, color: C.acc, fontWeight: 800, marginBottom: 4, letterSpacing: 0.5 }}>{p.brand}</div>}
           <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: 24, margin: "6px 0 8px", lineHeight: 1.35, fontWeight: 700 }}>{nm}</h2>
           {p.tags && p.tags.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 8 }}>{p.tags.map((tag, i) => <span key={i} style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20, background: tag.color || "#EEE", color: tag.textColor || "#555" }}>{tag.label}</span>)}</div>}
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 12, padding: "12px 0", borderTop: `1px solid ${C.bdr}`, borderBottom: `1px solid ${C.bdr}` }}><span style={{ fontSize: 28, fontWeight: 900, color: p.sale ? C.danger : C.pri }}>{fmt(bp)}</span>{p.sale && <span style={{ fontSize: 15, textDecoration: "line-through", color: C.light }}>{fmt(p.price)}</span>}</div>
+          {p.variants && p.variants.length > 0 && <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.mid, marginBottom: 6 }}>{lang === "ko" ? "옵션 선택" : "Select Option"}</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {p.variants.map((v, i) => { const active = selVariant?.label === v.label; return <button key={i} onClick={() => setSelVariant(v)} style={{ ...B, padding: "10px 18px", fontSize: 13, background: active ? C.pri : "#FFF", color: active ? "#FFF" : C.txt, border: `2px solid ${active ? C.pri : C.bdr}`, borderRadius: 10, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, minWidth: 90 }}><span style={{ fontWeight: 700 }}>{v.label}</span><span style={{ fontSize: 12, fontWeight: 800 }}>{fmt(Number(v.price))}</span></button>; })}
+            </div>
+          </div>}
+          {(() => { const vp = selVariant ? Number(selVariant.price) : bp; const origP = selVariant ? Number(selVariant.origPrice || p.price) : p.price; const isSale = selVariant ? (selVariant.origPrice && Number(selVariant.price) < Number(selVariant.origPrice)) : p.sale; return <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 12, padding: "12px 0", borderTop: `1px solid ${C.bdr}`, borderBottom: `1px solid ${C.bdr}` }}><span style={{ fontSize: 28, fontWeight: 900, color: isSale ? C.danger : C.pri }}>{fmt(vp)}</span>{isSale && <span style={{ fontSize: 15, textDecoration: "line-through", color: C.light }}>{fmt(origP)}</span>}</div>; })()}
           {p.tiered && p.tiered.length > 0 && <div style={{ background: C.priL, borderRadius: 10, padding: "10px 14px", marginBottom: 14 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: C.pri, marginBottom: 6 }}>📦 {t.bulk}</div>
             <div style={{ display: "flex", gap: 6 }}>
@@ -632,11 +648,12 @@ export default function NovoMarket() {
             {ic && <div style={{ fontSize: 11, color: C.pri, fontWeight: 600, marginTop: 6, textAlign: "center" }}>✓ {t.cur}: {fmt(tp)}/{t.ea}</div>}
           </div>}
           <div style={{ fontSize: 14, lineHeight: 1.7, color: C.mid, margin: "0 0 20px" }}>{renderDesc(dc)}</div>
-          {p.stock === 0 ? <div style={{ ...B, width: "100%", padding: 14, fontSize: 15, textAlign: "center", background: "#CCC", color: "#FFF", borderRadius: 12 }}>{t.sold}</div>
+          {(() => { const hasVars = p.variants && p.variants.length > 0; const needsVariant = hasVars && !selVariant; const cartId = selVariant ? `${p.id}__${selVariant.label}` : p.id; const ic2 = cart.find(c => c.id === cartId);
+            return p.stock === 0 ? <div style={{ ...B, width: "100%", padding: 14, fontSize: 15, textAlign: "center", background: "#CCC", color: "#FFF", borderRadius: 12 }}>{t.sold}</div>
             : <div style={{ display: "flex", gap: 10 }}>
-              {ic && <div style={{ display: "flex", alignItems: "center", gap: 0, background: "#FFF", borderRadius: 12, border: `2px solid ${C.pri}`, overflow: "hidden" }}><button onClick={() => updQty(p.id, -1)} style={{ ...B, background: "none", color: C.pri, fontSize: 20, padding: "8px 14px", borderRadius: 0 }}>−</button><span style={{ fontWeight: 800, fontSize: 16, minWidth: 28, textAlign: "center", color: C.pri }}>{ic.qty}</span><button onClick={() => updQty(p.id, 1)} style={{ ...B, background: "none", color: C.pri, fontSize: 20, padding: "8px 14px", borderRadius: 0 }}>+</button></div>}
-              <button onClick={() => addToCart(p)} style={{ ...B, flex: 1, padding: 14, fontSize: 15, background: C.pri, color: "#FFF", borderRadius: 12, boxShadow: "0 3px 12px rgba(91,154,139,.3)" }}>{ic ? `✓ ${t.add}` : t.add}</button>
-            </div>}
+              {ic2 && <div style={{ display: "flex", alignItems: "center", gap: 0, background: "#FFF", borderRadius: 12, border: `2px solid ${C.pri}`, overflow: "hidden" }}><button onClick={() => updQty(cartId, -1)} style={{ ...B, background: "none", color: C.pri, fontSize: 20, padding: "8px 14px", borderRadius: 0 }}>−</button><span style={{ fontWeight: 800, fontSize: 16, minWidth: 28, textAlign: "center", color: C.pri }}>{ic2.qty}</span><button onClick={() => updQty(cartId, 1)} style={{ ...B, background: "none", color: C.pri, fontSize: 20, padding: "8px 14px", borderRadius: 0 }}>+</button></div>}
+              <button onClick={() => { if (needsVariant) { setToast(lang === "ko" ? "옵션을 선택해주세요" : "Please select an option"); return; } addToCart(p, selVariant); }} style={{ ...B, flex: 1, padding: 14, fontSize: 15, background: needsVariant ? "#CCC" : C.pri, color: "#FFF", borderRadius: 12, boxShadow: needsVariant ? "none" : "0 3px 12px rgba(91,154,139,.3)" }}>{needsVariant ? (lang === "ko" ? "옵션을 선택해주세요" : "Select an option") : ic2 ? `✓ ${t.add}` : t.add}</button>
+            </div>; })()}
           {p.stock > 0 && p.stock <= 10 && <div style={{ marginTop: 10, fontSize: 12, color: "#E67E22", fontWeight: 600 }}>⚡ {lang === "en" ? `Only ${p.stock} left!` : `${p.stock}개 남음!`}</div>}
         </div>
       </div>;
@@ -702,7 +719,7 @@ export default function NovoMarket() {
         {cart.map(item => { const bp2 = basePrice(item); const tp2 = tieredPrice(item, item.qty); const isTiered = tp2 < bp2; const nm = pName(item); const hasImg = item.media && item.media[0]?.url; const lineTotal = Math.round(tp2 * item.qty * 100) / 100;
           return <div key={item.id} style={{ background: C.card, borderRadius: 12, padding: 10, marginBottom: 8, display: "flex", gap: 10, alignItems: "center", border: `1px solid ${C.bdr}` }}>
             {hasImg ? <div style={{ width: 50, height: 50, borderRadius: 8, overflow: "hidden", flexShrink: 0 }}><img src={item.media[0].url} alt={nm} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "contain" }} /></div> : <div style={{ fontSize: 30, width: 50, textAlign: "center", flexShrink: 0 }}>{item.image || "📦"}</div>}
-            <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12, fontWeight: 700, marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{nm}</div><div style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ fontSize: 13, fontWeight: 800, color: isTiered ? C.acc : C.pri }}>{fmt(tp2)}</span>{isTiered && <span style={{ fontSize: 10, color: C.light, textDecoration: "line-through" }}>{fmt(bp2)}</span>}<span style={{ fontSize: 11, color: C.mid, marginLeft: 4 }}>= {fmt(lineTotal)}</span></div></div>
+            <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12, fontWeight: 700, marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{nm}{item.variant && <span style={{ fontSize: 10, color: C.acc, fontWeight: 600, marginLeft: 4 }}>({item.variant})</span>}</div><div style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ fontSize: 13, fontWeight: 800, color: isTiered ? C.acc : C.pri }}>{fmt(tp2)}</span>{isTiered && <span style={{ fontSize: 10, color: C.light, textDecoration: "line-through" }}>{fmt(bp2)}</span>}<span style={{ fontSize: 11, color: C.mid, marginLeft: 4 }}>= {fmt(lineTotal)}</span></div></div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}><button onClick={() => updQty(item.id, -1)} style={{ ...B, width: 26, height: 26, background: C.priL, color: C.pri, fontSize: 14, padding: 0 }}>−</button><span style={{ fontWeight: 700, fontSize: 13, minWidth: 16, textAlign: "center" }}>{item.qty}</span><button onClick={() => updQty(item.id, 1)} style={{ ...B, width: 26, height: 26, background: C.priL, color: C.pri, fontSize: 14, padding: 0 }}>+</button></div>
             <button onClick={() => rmItem(item.id)} style={{ ...B, background: "none", color: C.danger, fontSize: 16, padding: 4 }}>✕</button>
           </div>; })}
@@ -735,7 +752,7 @@ export default function NovoMarket() {
       <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: 20, marginBottom: 16 }}>{t.info}</h2>
       <div style={{ background: C.card, borderRadius: 14, padding: 14, border: `1px solid ${C.bdr}`, marginBottom: 16 }}>
         <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>🛒</div>
-        {cart.map(item => { const nm = pName(item); const pr = tieredPrice(item, item.qty); return <div key={item.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "3px 0" }}><span>{nm} × {item.qty}</span><span style={{ fontWeight: 700 }}>{fmt(Math.round(pr * item.qty * 100) / 100)}</span></div>; })}
+        {cart.map(item => { const nm = pName(item); const pr = tieredPrice(item, item.qty); return <div key={item.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "3px 0" }}><span>{nm}{item.variant ? ` (${item.variant})` : ""} × {item.qty}</span><span style={{ fontWeight: 700 }}>{fmt(Math.round(pr * item.qty * 100) / 100)}</span></div>; })}
         <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0 0", fontSize: 16, fontWeight: 800, borderTop: `1px solid ${C.bdr}`, marginTop: 8 }}><span>{t.total}</span><span>{fmt(total)}</span></div>
       </div>
       {/* Delivery Method Selector */}
