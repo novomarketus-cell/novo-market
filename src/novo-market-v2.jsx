@@ -705,14 +705,18 @@ export default function NovoMarket() {
     {/* ─── SHOP GRID (normal) ─── */}
     {loaded && page === "shop" && !selProd && !addingToOrder && <div style={{ padding: "12px 16px 20px" }}>
       <div className="novo-shop-search" style={{ background: "#FFF", borderRadius: 24, padding: "10px 16px", display: "flex", alignItems: "center", gap: 10, marginBottom: 12, boxShadow: "0 2px 10px rgba(0,0,0,.05)" }}><span style={{ color: C.light, display: "inline-flex" }}><Icon name="search" size={18} /></span><input value={search} onChange={e => setSearch(e.target.value)} placeholder={t.search} style={{ border: "none", outline: "none", flex: 1, fontSize: 14, fontFamily: "'Nunito',sans-serif", background: "transparent", color: C.txt }} /></div>
-      <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8 }}>
-        <button onClick={() => setCat("all")} style={{ ...B, padding: "6px 14px", fontSize: 12, whiteSpace: "nowrap", background: cat === "all" ? C.pri : "#FFF", color: cat === "all" ? "#FFF" : C.mid, borderRadius: 20, boxShadow: cat === "all" ? "0 2px 8px rgba(91,154,139,.3)" : "0 1px 4px rgba(0,0,0,.06)" }}>{t.allCat}</button>
-        {catList.map(c => <button key={c.id} onClick={() => setCat(c.id)} style={{ ...B, padding: "6px 14px", fontSize: 12, whiteSpace: "nowrap", background: cat === c.id ? C.pri : "#FFF", color: cat === c.id ? "#FFF" : C.mid, borderRadius: 20, boxShadow: cat === c.id ? "0 2px 8px rgba(91,154,139,.3)" : "0 1px 4px rgba(0,0,0,.06)" }}>{lang === "en" ? c.nameEn : c.nameKo}</button>)}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, borderBottom: `1px solid ${C.bdr}`, marginBottom: 10, paddingBottom: 0 }}>
+        <div style={{ display: "flex", flex: 1, gap: 4, overflowX: "auto" }}>
+          {[{ id: "all", label: t.allCat }, ...catList.map(c => ({ id: c.id, label: lang === "en" ? c.nameEn : c.nameKo }))].map(c => {
+            const active = cat === c.id;
+            return <button key={c.id} onClick={() => setCat(c.id)} style={{ ...B, padding: "10px 14px", fontSize: 13, whiteSpace: "nowrap", background: "none", color: active ? C.txt : C.light, borderRadius: 0, fontWeight: active ? 800 : 600, borderBottom: `2px solid ${active ? C.pri : "transparent"}`, marginBottom: -1 }}>{c.label}</button>;
+          })}
+        </div>
+        {brandList.length > 0 && <select value={brandFilter} onChange={e => setBrandFilter(e.target.value)} style={{ border: `1px solid ${C.bdr}`, borderRadius: 8, padding: "7px 28px 7px 10px", fontSize: 12, background: brandFilter === "all" ? "#FFF" : C.accBg, color: brandFilter === "all" ? C.mid : C.acc, fontWeight: brandFilter === "all" ? 600 : 700, cursor: "pointer", appearance: "none", WebkitAppearance: "none", backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238A8A8A' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>")`, backgroundRepeat: "no-repeat", backgroundPosition: "right 8px center", marginBottom: 8 }}>
+          <option value="all">{lang === "en" ? "All Brands" : "전체 브랜드"}</option>
+          {brandList.map(b => <option key={b} value={b}>{b}</option>)}
+        </select>}
       </div>
-      {brandList.length > 0 && <div style={{ display: "flex", gap: 5, overflowX: "auto", paddingBottom: 8 }}>
-        <button onClick={() => setBrandFilter("all")} style={{ ...B, padding: "5px 12px", fontSize: 10, whiteSpace: "nowrap", background: brandFilter === "all" ? C.acc : "transparent", color: brandFilter === "all" ? "#FFF" : C.acc, borderRadius: 20, border: `1.5px solid ${C.acc}` }}>{lang === "en" ? "All Brands" : "전체 브랜드"}</button>
-        {brandList.map(b => <button key={b} onClick={() => setBrandFilter(b)} style={{ ...B, padding: "5px 12px", fontSize: 10, whiteSpace: "nowrap", background: brandFilter === b ? C.acc : "transparent", color: brandFilter === b ? "#FFF" : C.acc, borderRadius: 20, border: `1.5px solid ${brandFilter === b ? C.acc : "rgba(232,135,154,.3)"}` }}>{b}</button>)}
-      </div>}
       <div className="novo-hero" style={{ background: "linear-gradient(135deg, #FFF0F3, #FFECD2)", borderRadius: 12, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: C.acc, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>🚚 {t.freeNote}</div>
       <div className="novo-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(155px, 1fr))", gap: 12 }}>
         {filtered.map(p => {
