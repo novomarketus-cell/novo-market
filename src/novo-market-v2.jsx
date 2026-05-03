@@ -171,6 +171,19 @@ const STATUS_LABEL = {
 };
 const STATUS_COLOR = { pending_payment:"#E67E22", payment_submitted:"#F39C12", confirmed:"#27AE60", preparing:"#2980B9", shipped:"#8E44AD", delivered:"#2C3E50", cancelled:"#95A5A6" };
 
+/* ─── Icon set (Lucide-style line icons) ─── */
+const Icon = ({ name, size = 22, stroke = 1.8, color = "currentColor" }) => {
+  const common = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: stroke, strokeLinecap: "round", strokeLinejoin: "round" };
+  const paths = {
+    cart: <><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" /></>,
+    search: <><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></>,
+    list: <><path d="M9 6h11M9 12h11M9 18h11" /><circle cx="4" cy="6" r="1" /><circle cx="4" cy="12" r="1" /><circle cx="4" cy="18" r="1" /></>,
+    home: <><path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2h-4v-7h-6v7H5a2 2 0 0 1-2-2z" /></>,
+    info: <><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></>,
+  };
+  return <svg {...common}>{paths[name] || null}</svg>;
+};
+
 /* ─── LazyImg ─── */
 function LazyImg({ src, alt, style, onClick }) {
   const [ok, setOk] = useState(false); const [vis, setVis] = useState(false); const ref = useRef(null);
@@ -606,19 +619,23 @@ export default function NovoMarket() {
 
     {/* HEADER */}
     <div className="novo-header" style={{ background: "#FFF", padding: "10px 16px 8px", position: "sticky", top: 0, zIndex: 100, boxShadow: "0 2px 12px rgba(0,0,0,.06)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div onClick={() => { setPage("shop"); resetAll(); }} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
+        <div onClick={() => { setPage("shop"); resetAll(); }} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           <img src={NOVO_LOGO} alt="NOVO MARKET" style={{ width: 44, height: 44, borderRadius: 12 }} />
           <div><div data-novo-brand style={{ fontSize: 14, fontWeight: 800, color: C.pri, letterSpacing: -0.3 }}>NOVO MARKET</div><div data-novo-tag style={{ fontSize: 9, color: C.light, fontWeight: 600, letterSpacing: 0.5 }}>{t.tag}</div></div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div className="novo-header-search" style={{ flex: 1, maxWidth: 520, display: "none", alignItems: "center", gap: 8, background: "#F4F0EB", borderRadius: 999, padding: "9px 16px" }}>
+          <span style={{ color: C.light, display: "inline-flex" }}><Icon name="search" size={16} /></span>
+          <input value={search} onChange={e => { setSearch(e.target.value); if (page !== "shop") setPage("shop"); }} placeholder={t.search} style={{ border: "none", outline: "none", flex: 1, fontSize: 13, background: "transparent", color: C.txt }} />
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <button onClick={() => { setPage("shop"); resetAll(); }} className="novo-nav-link" style={{ ...B, background: "none", color: page === "shop" ? C.pri : C.mid, padding: "6px 10px", fontSize: 13, fontWeight: 700, display: "none" }}>{t.shop}</button>
           <button onClick={() => { setPage("history"); resetAll(); }} className="novo-nav-link" style={{ ...B, background: "none", color: page === "history" ? C.pri : C.mid, padding: "6px 10px", fontSize: 13, fontWeight: 700, display: "none" }}>{t.history}</button>
           <button onClick={() => setLang(lang === "en" ? "ko" : "en")} style={{ ...B, background: C.priL, color: C.pri, padding: "5px 10px", fontSize: 10, borderRadius: 20, fontWeight: 700 }}>{lang === "en" ? "한국어" : "EN"}</button>
-          <button onClick={() => setShowCancelPolicy(true)} style={{ ...B, background: "none", color: C.light, padding: 4, fontSize: 16 }}>📋</button>
-          <div onClick={() => { setPage("cart"); resetAll(); }} style={{ position: "relative", cursor: "pointer" }}>
-            <span style={{ fontSize: 22 }}>🛒</span>
-            {cartN > 0 && <span style={{ position: "absolute", top: -6, right: -8, background: C.acc, color: "#FFF", borderRadius: "50%", width: 18, height: 18, fontSize: 9, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 4px rgba(232,135,154,.4)" }}>{cartN}</span>}
+          <button onClick={() => setShowCancelPolicy(true)} aria-label="Policy" style={{ ...B, background: "none", color: C.light, padding: 6, display: "inline-flex", alignItems: "center" }}><Icon name="info" size={20} stroke={1.8} /></button>
+          <div onClick={() => { setPage("cart"); resetAll(); }} aria-label="Cart" style={{ position: "relative", cursor: "pointer", color: C.txt, padding: 4, display: "inline-flex" }}>
+            <Icon name="cart" size={22} stroke={1.8} />
+            {cartN > 0 && <span style={{ position: "absolute", top: -4, right: -6, background: C.acc, color: "#FFF", borderRadius: "50%", width: 18, height: 18, fontSize: 9, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 4px rgba(216,86,116,.4)" }}>{cartN}</span>}
           </div>
         </div>
       </div>
@@ -631,10 +648,11 @@ export default function NovoMarket() {
       const p = activeProducts.find(x => x.id === selProd); if (!p) return null;
       const nm = pName(p); const dc = pDesc(p); const bp = basePrice(p);
       const ic = cart.find(c => c.id === p.id); const tp = ic ? tieredPrice(p, ic.qty) : bp;
-      return <div style={{ padding: 16, paddingBottom: 100, animation: "fadeUp .3s ease" }}>
+      return <div className="novo-pdp-page" style={{ padding: 16, paddingBottom: 100, animation: "fadeUp .3s ease" }}>
         <button onClick={() => { setSelProd(null); setSelVariant(null); }} style={{ ...B, background: "none", color: C.pri, padding: "4px 0 14px", fontSize: 14, display: "flex", alignItems: "center", gap: 4 }}>← {t.back}</button>
-        <Gallery media={p.media} emoji={p.image} name={nm} />
-        <div style={{ marginTop: 16 }}>
+        <div className="novo-pdp">
+        <div className="novo-pdp-gallery"><Gallery media={p.media} emoji={p.image} name={nm} /></div>
+        <div className="novo-pdp-info" style={{ marginTop: 16 }}>
           {p.sale && <span style={{ background: "linear-gradient(135deg, #E85D5D, #E8879A)", color: "#FFF", fontSize: 11, fontWeight: 700, padding: "4px 12px", borderRadius: 20, marginBottom: 8, display: "inline-block" }}>{Math.round((1 - p.salePrice / p.price) * 100)}% {t.off}</span>}
           {p.brand && <div style={{ fontSize: 12, color: C.acc, fontWeight: 800, marginBottom: 4, letterSpacing: 0.5 }}>{p.brand}</div>}
           <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: 24, margin: "6px 0 8px", lineHeight: 1.35, fontWeight: 700 }}>{nm}</h2>
@@ -664,6 +682,7 @@ export default function NovoMarket() {
             </div>; })()}
           {(() => { const stk = selVariant ? (selVariant.stock ?? p.stock) : p.stock; return stk > 0 && stk <= 10 ? <div style={{ marginTop: 10, fontSize: 12, color: "#E67E22", fontWeight: 600 }}>⚡ {lang === "en" ? `Only ${stk} left!` : `${stk}개 남음!`}</div> : null; })()}
         </div>
+        </div>
       </div>;
     })()}
 
@@ -671,7 +690,7 @@ export default function NovoMarket() {
     {loaded && page === "shop" && addingToOrder && !selProd && <div style={{ padding: "12px 16px 20px" }}>
       <button onClick={() => { setAddingToOrder(null); setPage("history"); }} style={{ ...B, background: "none", color: C.pri, padding: "0 0 8px", fontSize: 14 }}>{t.backToOrders}</button>
       <div style={{ background: "#FFF3E0", borderRadius: 10, padding: "10px 14px", marginBottom: 12, fontSize: 12, color: "#E67E22", fontWeight: 700 }}>📦 {t.addMoreItems} — {addingToOrder.orderNum}</div>
-      <div style={{ background: C.wh, borderRadius: 10, border: `1px solid ${C.bdr}`, padding: "9px 12px", display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}><span>🔍</span><input value={search} onChange={e => setSearch(e.target.value)} placeholder={t.search} style={{ border: "none", outline: "none", flex: 1, fontSize: 13, fontFamily: "'Nunito',sans-serif", background: "transparent" }} /></div>
+      <div style={{ background: C.wh, borderRadius: 10, border: `1px solid ${C.bdr}`, padding: "9px 12px", display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}><span style={{ color: C.light, display: "inline-flex" }}><Icon name="search" size={16} /></span><input value={search} onChange={e => setSearch(e.target.value)} placeholder={t.search} style={{ border: "none", outline: "none", flex: 1, fontSize: 13, fontFamily: "'Nunito',sans-serif", background: "transparent" }} /></div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         {activeProducts.filter(p => p.stock > 0 && (!search || [p.nameKo,p.nameEn,p.brand,...(p.tags||[]).map(t=>t.label)].filter(Boolean).some(f=>f.toLowerCase().includes(search.toLowerCase())))).map(p => {
           const nm = pName(p); const pr = basePrice(p); const hasImg = p.media && p.media.length > 0 && p.media[0].url;
@@ -685,7 +704,7 @@ export default function NovoMarket() {
 
     {/* ─── SHOP GRID (normal) ─── */}
     {loaded && page === "shop" && !selProd && !addingToOrder && <div style={{ padding: "12px 16px 20px" }}>
-      <div style={{ background: "#FFF", borderRadius: 24, padding: "10px 16px", display: "flex", alignItems: "center", gap: 10, marginBottom: 12, boxShadow: "0 2px 10px rgba(0,0,0,.05)" }}><span style={{ fontSize: 16, opacity: 0.4 }}>🔍</span><input value={search} onChange={e => setSearch(e.target.value)} placeholder={t.search} style={{ border: "none", outline: "none", flex: 1, fontSize: 14, fontFamily: "'Nunito',sans-serif", background: "transparent", color: C.txt }} /></div>
+      <div className="novo-shop-search" style={{ background: "#FFF", borderRadius: 24, padding: "10px 16px", display: "flex", alignItems: "center", gap: 10, marginBottom: 12, boxShadow: "0 2px 10px rgba(0,0,0,.05)" }}><span style={{ color: C.light, display: "inline-flex" }}><Icon name="search" size={18} /></span><input value={search} onChange={e => setSearch(e.target.value)} placeholder={t.search} style={{ border: "none", outline: "none", flex: 1, fontSize: 14, fontFamily: "'Nunito',sans-serif", background: "transparent", color: C.txt }} /></div>
       <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8 }}>
         <button onClick={() => setCat("all")} style={{ ...B, padding: "6px 14px", fontSize: 12, whiteSpace: "nowrap", background: cat === "all" ? C.pri : "#FFF", color: cat === "all" ? "#FFF" : C.mid, borderRadius: 20, boxShadow: cat === "all" ? "0 2px 8px rgba(91,154,139,.3)" : "0 1px 4px rgba(0,0,0,.06)" }}>{t.allCat}</button>
         {catList.map(c => <button key={c.id} onClick={() => setCat(c.id)} style={{ ...B, padding: "6px 14px", fontSize: 12, whiteSpace: "nowrap", background: cat === c.id ? C.pri : "#FFF", color: cat === c.id ? "#FFF" : C.mid, borderRadius: 20, boxShadow: cat === c.id ? "0 2px 8px rgba(91,154,139,.3)" : "0 1px 4px rgba(0,0,0,.06)" }}>{lang === "en" ? c.nameEn : c.nameKo}</button>)}
@@ -864,9 +883,9 @@ export default function NovoMarket() {
 
     {/* ─── BOTTOM TAB BAR (3 tabs) ─── */}
     <div className="novo-bottom-nav" style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 560, background: "#FFF", display: "flex", zIndex: 100, boxShadow: "0 -4px 20px rgba(0,0,0,.08)", borderRadius: "16px 16px 0 0", padding: "2px 0" }}>
-      {[{ k: "shop", i: "🏠", l: t.shop }, { k: "cart", i: "🛒", l: t.cart, badge: cartN }, { k: "history", i: "📋", l: t.history }].map(tab =>
-        <button key={tab.k} onClick={() => { setPage(tab.k); resetAll(); }} style={{ flex: 1, border: "none", background: "none", cursor: "pointer", padding: "10px 0 8px", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, position: "relative", fontFamily: "'Nunito',sans-serif", transition: "all .2s" }}>
-          <div style={{ fontSize: 22, position: "relative", transition: "transform .2s", transform: page === tab.k ? "scale(1.1)" : "scale(1)" }}>{tab.i}{tab.badge > 0 && <span style={{ position: "absolute", top: -6, right: -10, background: C.acc, color: "#FFF", borderRadius: "50%", width: 17, height: 17, fontSize: 9, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 4px rgba(232,135,154,.4)" }}>{tab.badge}</span>}</div>
+      {[{ k: "shop", i: "home", l: t.shop }, { k: "cart", i: "cart", l: t.cart, badge: cartN }, { k: "history", i: "list", l: t.history }].map(tab =>
+        <button key={tab.k} onClick={() => { setPage(tab.k); resetAll(); }} style={{ flex: 1, border: "none", background: "none", cursor: "pointer", padding: "10px 0 8px", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, position: "relative", fontFamily: "'Nunito',sans-serif", transition: "all .2s", color: page === tab.k ? C.pri : C.light }}>
+          <div style={{ position: "relative", transition: "transform .2s", transform: page === tab.k ? "scale(1.08)" : "scale(1)", display: "inline-flex" }}><Icon name={tab.i} size={22} stroke={page === tab.k ? 2.2 : 1.8} />{tab.badge > 0 && <span style={{ position: "absolute", top: -6, right: -10, background: C.acc, color: "#FFF", borderRadius: "50%", width: 17, height: 17, fontSize: 9, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 4px rgba(216,86,116,.4)" }}>{tab.badge}</span>}</div>
           <span style={{ fontSize: 10, fontWeight: page === tab.k ? 800 : 500, color: page === tab.k ? C.pri : C.light }}>{tab.l}</span>
           {page === tab.k && <div style={{ position: "absolute", top: 0, left: "30%", right: "30%", height: 3, background: C.pri, borderRadius: "0 0 3px 3px" }} />}
         </button>)}

@@ -125,10 +125,36 @@ button { font-family: inherit; }
   }
   .novo-nav-link:hover { background: #F4F0EB !important; }
 
+  /* Header search bar — desktop only (Amazon/Shopify pattern) */
+  .novo-header-search {
+    display: flex !important;
+  }
+  .novo-header-search:focus-within {
+    background: #FFF !important;
+    box-shadow: 0 0 0 2px var(--novo-pri);
+  }
+
+  /* Hide the in-page shop search on desktop since the header has it */
+  .novo-shop-search { display: none !important; }
+
   /* Hero banner stretches out */
   .novo-hero {
     padding: 14px 20px !important;
     font-size: 13px !important;
+  }
+
+  /* Product detail page — gallery left, info right */
+  .novo-pdp-page { padding: 24px 40px 80px !important; }
+  .novo-pdp {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    gap: 56px;
+    align-items: start;
+  }
+  .novo-pdp-info { margin-top: 0 !important; }
+  .novo-pdp-gallery {
+    position: sticky;
+    top: 96px;
   }
 }
 
