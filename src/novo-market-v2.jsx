@@ -714,6 +714,7 @@ export default function NovoMarket() {
               <button onClick={() => { if (needsVariant) { setToast(lang === "ko" ? "옵션을 선택해주세요" : "Please select an option"); return; } addToCart(p, selVariant); }} style={{ ...B, flex: 1, padding: 14, fontSize: 15, background: needsVariant ? "#CCC" : C.pri, color: "#FFF", borderRadius: 12, boxShadow: needsVariant ? "none" : "0 3px 12px rgba(91,154,139,.3)" }}>{needsVariant ? (lang === "ko" ? "옵션을 선택해주세요" : "Select an option") : ic2 ? `✓ ${t.add}` : t.add}</button>
             </div>; })()}
           {(() => { const stk = selVariant ? (selVariant.stock ?? p.stock) : p.stock; return stk > 0 && stk <= 10 ? <div style={{ marginTop: 10, fontSize: 12, color: "#E67E22", fontWeight: 600 }}>⚡ {lang === "en" ? `Only ${stk} left!` : `${stk}개 남음!`}</div> : null; })()}
+          <button onClick={() => window.history.back()} style={{ ...B, width: "100%", padding: 12, marginTop: 12, fontSize: 13, background: "transparent", color: C.mid, border: `1px solid ${C.bdr}`, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}><Icon name="chevronLeft" size={16} stroke={2} />{t.back}</button>
         </div>
         </div>
       </div>;
