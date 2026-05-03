@@ -180,6 +180,7 @@ const Icon = ({ name, size = 22, stroke = 1.8, color = "currentColor" }) => {
     list: <><path d="M9 6h11M9 12h11M9 18h11" /><circle cx="4" cy="6" r="1" /><circle cx="4" cy="12" r="1" /><circle cx="4" cy="18" r="1" /></>,
     home: <><path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2h-4v-7h-6v7H5a2 2 0 0 1-2-2z" /></>,
     info: <><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></>,
+    chevronLeft: <path d="m15 18-6-6 6-6" />,
   };
   return <svg {...common}>{paths[name] || null}</svg>;
 };
@@ -638,6 +639,7 @@ export default function NovoMarket() {
     {/* HEADER */}
     <div className="novo-header" style={{ background: "#FFF", padding: "10px 16px 8px", position: "sticky", top: 0, zIndex: 100, boxShadow: "0 2px 12px rgba(0,0,0,.06)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
+        {selProd && <button onClick={() => window.history.back()} aria-label="Back" style={{ ...B, background: "none", color: C.txt, padding: 6, marginRight: -6, display: "inline-flex", alignItems: "center", flexShrink: 0 }}><Icon name="chevronLeft" size={26} stroke={2} /></button>}
         <div onClick={() => { setPage("shop"); resetAll(); }} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           <img src={NOVO_LOGO} alt="NOVO MARKET" style={{ width: 44, height: 44, borderRadius: 12 }} />
           <div><div data-novo-brand style={{ fontSize: 14, fontWeight: 800, color: C.pri, letterSpacing: -0.3 }}>NOVO MARKET</div><div data-novo-tag style={{ fontSize: 9, color: C.light, fontWeight: 600, letterSpacing: 0.5 }}>{t.tag}</div></div>
