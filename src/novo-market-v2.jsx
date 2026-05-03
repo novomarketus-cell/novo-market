@@ -591,7 +591,7 @@ export default function NovoMarket() {
     </div>
   );};
 
-  return <div style={{ fontFamily: "'Nunito',sans-serif", background: C.bg, minHeight: "100vh", maxWidth: 560, margin: "0 auto", color: C.txt, position: "relative", paddingBottom: 70 }}>
+  return <div className="novo-app" style={{ fontFamily: "'Nunito',sans-serif", background: C.bg, minHeight: "100vh", maxWidth: 560, margin: "0 auto", color: C.txt, position: "relative", paddingBottom: 70 }}>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Playfair+Display:wght@700&display=swap" rel="stylesheet" />
     <style>{`@media(min-width:561px){body{background:#F5F0ED}} *{-webkit-tap-highlight-color:transparent} @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}} .novo-card:active{transform:scale(0.97)}`}</style>
     {toast && <div style={{ position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)", zIndex: 999, background: C.pri, color: "#FFF", padding: "10px 24px", borderRadius: 10, fontSize: 13, fontWeight: 700, boxShadow: "0 4px 16px rgba(0,0,0,.2)", maxWidth: 400 }}>{toast}</div>}
@@ -605,13 +605,15 @@ export default function NovoMarket() {
     </div>}
 
     {/* HEADER */}
-    <div style={{ background: "#FFF", padding: "10px 16px 8px", position: "sticky", top: 0, zIndex: 100, boxShadow: "0 2px 12px rgba(0,0,0,.06)" }}>
+    <div className="novo-header" style={{ background: "#FFF", padding: "10px 16px 8px", position: "sticky", top: 0, zIndex: 100, boxShadow: "0 2px 12px rgba(0,0,0,.06)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div onClick={() => { setPage("shop"); resetAll(); }} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
           <img src={NOVO_LOGO} alt="NOVO MARKET" style={{ width: 44, height: 44, borderRadius: 12 }} />
-          <div><div style={{ fontSize: 14, fontWeight: 800, color: C.pri, letterSpacing: -0.3 }}>NOVO MARKET</div><div style={{ fontSize: 9, color: C.light, fontWeight: 600, letterSpacing: 0.5 }}>{t.tag}</div></div>
+          <div><div data-novo-brand style={{ fontSize: 14, fontWeight: 800, color: C.pri, letterSpacing: -0.3 }}>NOVO MARKET</div><div data-novo-tag style={{ fontSize: 9, color: C.light, fontWeight: 600, letterSpacing: 0.5 }}>{t.tag}</div></div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button onClick={() => { setPage("shop"); resetAll(); }} className="novo-nav-link" style={{ ...B, background: "none", color: page === "shop" ? C.pri : C.mid, padding: "6px 10px", fontSize: 13, fontWeight: 700, display: "none" }}>{t.shop}</button>
+          <button onClick={() => { setPage("history"); resetAll(); }} className="novo-nav-link" style={{ ...B, background: "none", color: page === "history" ? C.pri : C.mid, padding: "6px 10px", fontSize: 13, fontWeight: 700, display: "none" }}>{t.history}</button>
           <button onClick={() => setLang(lang === "en" ? "ko" : "en")} style={{ ...B, background: C.priL, color: C.pri, padding: "5px 10px", fontSize: 10, borderRadius: 20, fontWeight: 700 }}>{lang === "en" ? "한국어" : "EN"}</button>
           <button onClick={() => setShowCancelPolicy(true)} style={{ ...B, background: "none", color: C.light, padding: 4, fontSize: 16 }}>📋</button>
           <div onClick={() => { setPage("cart"); resetAll(); }} style={{ position: "relative", cursor: "pointer" }}>
@@ -692,8 +694,8 @@ export default function NovoMarket() {
         <button onClick={() => setBrandFilter("all")} style={{ ...B, padding: "5px 12px", fontSize: 10, whiteSpace: "nowrap", background: brandFilter === "all" ? C.acc : "transparent", color: brandFilter === "all" ? "#FFF" : C.acc, borderRadius: 20, border: `1.5px solid ${C.acc}` }}>{lang === "en" ? "All Brands" : "전체 브랜드"}</button>
         {brandList.map(b => <button key={b} onClick={() => setBrandFilter(b)} style={{ ...B, padding: "5px 12px", fontSize: 10, whiteSpace: "nowrap", background: brandFilter === b ? C.acc : "transparent", color: brandFilter === b ? "#FFF" : C.acc, borderRadius: 20, border: `1.5px solid ${brandFilter === b ? C.acc : "rgba(232,135,154,.3)"}` }}>{b}</button>)}
       </div>}
-      <div style={{ background: "linear-gradient(135deg, #FFF0F3, #FFECD2)", borderRadius: 12, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: C.acc, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>🚚 {t.freeNote}</div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(155px, 1fr))", gap: 12 }}>
+      <div className="novo-hero" style={{ background: "linear-gradient(135deg, #FFF0F3, #FFECD2)", borderRadius: 12, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: C.acc, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>🚚 {t.freeNote}</div>
+      <div className="novo-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(155px, 1fr))", gap: 12 }}>
         {filtered.map(p => {
           const nm = pName(p); const pr = basePrice(p); const hasVars = p.variants && p.variants.length > 0; const so = hasVars ? p.variants.every(v => (v.stock ?? 0) <= 0) : p.stock === 0; const hasImg = p.media && p.media.length > 0 && p.media[0].url;
           return <div key={p.id} className="novo-card" onClick={() => setSelProd(p.id)} style={{ background: "#FFF", borderRadius: 16, overflow: "hidden", position: "relative", cursor: "pointer", opacity: so ? .55 : 1, boxShadow: "0 2px 12px rgba(0,0,0,.06)", display: "flex", flexDirection: "column", transition: "transform .2s, box-shadow .2s" }}>
@@ -861,7 +863,7 @@ export default function NovoMarket() {
     {page === "history" && editingOrder && <EditOrderPanel order={editingOrder} products={products} lang={lang} t={t} C={C} B={B} pName={pName} onClose={() => setEditingOrder(null)} onUpdate={handleUpdateOrder} onDelete={handleDeleteOrder} />}
 
     {/* ─── BOTTOM TAB BAR (3 tabs) ─── */}
-    <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 560, background: "#FFF", display: "flex", zIndex: 100, boxShadow: "0 -4px 20px rgba(0,0,0,.08)", borderRadius: "16px 16px 0 0", padding: "2px 0" }}>
+    <div className="novo-bottom-nav" style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 560, background: "#FFF", display: "flex", zIndex: 100, boxShadow: "0 -4px 20px rgba(0,0,0,.08)", borderRadius: "16px 16px 0 0", padding: "2px 0" }}>
       {[{ k: "shop", i: "🏠", l: t.shop }, { k: "cart", i: "🛒", l: t.cart, badge: cartN }, { k: "history", i: "📋", l: t.history }].map(tab =>
         <button key={tab.k} onClick={() => { setPage(tab.k); resetAll(); }} style={{ flex: 1, border: "none", background: "none", cursor: "pointer", padding: "10px 0 8px", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, position: "relative", fontFamily: "'Nunito',sans-serif", transition: "all .2s" }}>
           <div style={{ fontSize: 22, position: "relative", transition: "transform .2s", transform: page === tab.k ? "scale(1.1)" : "scale(1)" }}>{tab.i}{tab.badge > 0 && <span style={{ position: "absolute", top: -6, right: -10, background: C.acc, color: "#FFF", borderRadius: "50%", width: 17, height: 17, fontSize: 9, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 4px rgba(232,135,154,.4)" }}>{tab.badge}</span>}</div>

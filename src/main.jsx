@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import NovoMarket from "./novo-market-v2";
 import Admin from "./novo-admin-dashboard";
+import "./styles.css";
 
 function App() {
   return (
