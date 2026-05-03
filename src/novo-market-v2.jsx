@@ -499,7 +499,7 @@ export default function NovoMarket() {
     setToast(t.itemAdded);
   };
 
-  const C = { bg:"#FFF9F7", card:"#FFF", pri:"#5B9A8B", priL:"#EDF6F3", acc:"#E8879A", accBg:"#FFF0F3", txt:"#2A2A2A", mid:"#666", light:"#999", bdr:"#F0ECEC", danger:"#E85D5D", wh:"#FFF", warm:"#FFF5EE", peach:"#FFECD2" };
+  const C = { bg:"#FAF8F4", card:"#FFF", pri:"#2F8576", priL:"#E6F0EC", acc:"#D85674", accBg:"#FBEEF1", txt:"#111111", mid:"#4A4A4A", light:"#8A8A8A", bdr:"#E8E2D9", danger:"#D94A4A", wh:"#FFF", warm:"#F5EFE8", peach:"#F2E5CE" };
   const B = { border:"none", borderRadius:12, cursor:"pointer", fontWeight:600, fontFamily:"'Nunito',sans-serif", transition:"all .2s ease" };
   const pName = p => lang === "en" ? (p.nameEn || p.name_en || p.name || "") : (p.nameKo || p.name_ko || p.name || "");
   const pDesc = p => lang === "en" ? (p.descEn || "") : (p.descKo || "");

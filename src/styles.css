@@ -5,12 +5,42 @@
  * hidden bottom nav, sticky pro header).
  */
 
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css");
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
 
 :root {
-  --novo-pri: #5B9A8B;
-  --novo-acc: #E8879A;
-  --novo-page: #F2EDE7;
+  --novo-pri: #2F8576;        /* deeper, premium teal */
+  --novo-pri-l: #E6F0EC;
+  --novo-acc: #D85674;        /* confident rose */
+  --novo-acc-l: #FBEEF1;
+  --novo-txt: #111111;
+  --novo-mid: #4A4A4A;
+  --novo-light: #8A8A8A;
+  --novo-bdr: #E8E2D9;
+  --novo-page: #ECE7DF;       /* warm neutral that frames the white app */
+  --novo-app-bg: #FAF8F4;     /* clean off-white inside the app */
+}
+
+/* Override the Nunito + Playfair inline fonts everywhere via !important.
+   !important in CSS beats inline styles, so we don't need to edit 24
+   inline style declarations. */
+.novo-app,
+.novo-app *,
+.novo-app input,
+.novo-app button,
+.novo-app textarea,
+.novo-app select {
+  font-family: "Pretendard Variable", "Pretendard", "Inter",
+    -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif !important;
+  font-feature-settings: "ss01", "ss02", "tnum";
+}
+
+/* Display headings — same family but tighter, more modern */
+.novo-app h1,
+.novo-app h2,
+.novo-app h3 {
+  letter-spacing: -0.02em !important;
+  font-weight: 800 !important;
 }
 
 * { box-sizing: border-box; }
@@ -19,13 +49,15 @@ html, body {
   margin: 0;
   padding: 0;
   background: var(--novo-page);
+  color: var(--novo-txt);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
 
 body {
-  font-family: "Inter", "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-family: "Pretendard Variable", "Pretendard", "Inter",
+    -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
 }
 
 img { display: block; max-width: 100%; }
