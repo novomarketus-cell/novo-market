@@ -639,7 +639,7 @@ export default function NovoMarket() {
     {/* HEADER */}
     <div className="novo-header" style={{ background: "#FFF", padding: "10px 16px 8px", position: "sticky", top: 0, zIndex: 100, boxShadow: "0 2px 12px rgba(0,0,0,.06)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
-        {selProd && <button onClick={() => window.history.back()} aria-label="Back" style={{ ...B, background: "none", color: C.txt, padding: 6, marginRight: -6, display: "inline-flex", alignItems: "center", flexShrink: 0 }}><Icon name="chevronLeft" size={26} stroke={2} /></button>}
+        {selProd && <button onClick={() => { setSelProd(null); setSelVariant(null); }} aria-label="Back" style={{ ...B, background: "none", color: C.txt, padding: 6, marginRight: -6, display: "inline-flex", alignItems: "center", flexShrink: 0 }}><Icon name="chevronLeft" size={26} stroke={2} /></button>}
         <div onClick={() => { setPage("shop"); resetAll(); }} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           <img src={NOVO_LOGO} alt="NOVO MARKET" style={{ width: 44, height: 44, borderRadius: 12 }} />
           <div><div data-novo-brand style={{ fontSize: 14, fontWeight: 800, color: C.pri, letterSpacing: -0.3 }}>NOVO MARKET</div><div data-novo-tag style={{ fontSize: 9, color: C.light, fontWeight: 600, letterSpacing: 0.5 }}>{t.tag}</div></div>
@@ -669,7 +669,7 @@ export default function NovoMarket() {
       const nm = pName(p); const dc = pDesc(p); const bp = basePrice(p);
       const ic = cart.find(c => c.id === p.id); const tp = ic ? tieredPrice(p, ic.qty) : bp;
       return <div className="novo-pdp-page" style={{ padding: 16, paddingBottom: 100, animation: "fadeUp .3s ease" }}>
-        <button onClick={() => window.history.back()} style={{ ...B, background: "none", color: C.pri, padding: "4px 0 14px", fontSize: 14, display: "flex", alignItems: "center", gap: 4 }}>← {t.back}</button>
+        <button onClick={() => { setSelProd(null); setSelVariant(null); }} style={{ ...B, background: "none", color: C.pri, padding: "4px 0 14px", fontSize: 14, display: "flex", alignItems: "center", gap: 4 }}>← {t.back}</button>
         <div className="novo-pdp">
         <div className="novo-pdp-gallery"><Gallery media={p.media} emoji={p.image} name={nm} /></div>
         <div className="novo-pdp-info" style={{ marginTop: 16 }}>
@@ -920,7 +920,7 @@ export default function NovoMarket() {
 
     {/* ─── BOTTOM TAB BAR ─── */}
     <div className="novo-bottom-nav" style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 560, background: "#FFF", display: "flex", zIndex: 100, boxShadow: "0 -4px 20px rgba(0,0,0,.08)", borderRadius: "16px 16px 0 0", padding: "2px 0" }}>
-      {selProd && <button onClick={() => window.history.back()} style={{ flex: 1, border: "none", background: "none", cursor: "pointer", padding: "10px 0 8px", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, position: "relative", transition: "all .2s", color: C.pri }}>
+      {selProd && <button onClick={() => { setSelProd(null); setSelVariant(null); }} style={{ flex: 1, border: "none", background: "none", cursor: "pointer", padding: "10px 0 8px", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, position: "relative", transition: "all .2s", color: C.pri, WebkitTapHighlightColor: "rgba(47,133,118,.15)" }}>
         <div style={{ display: "inline-flex" }}><Icon name="chevronLeft" size={22} stroke={2.2} /></div>
         <span style={{ fontSize: 10, fontWeight: 800, color: C.pri }}>{t.back}</span>
       </button>}
