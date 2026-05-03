@@ -299,6 +299,24 @@ export default function NovoMarket() {
   }, []);
   useEffect(() => { if (toast) { const tm = setTimeout(() => setToast(null), 2500); return () => clearTimeout(tm); } }, [toast]);
 
+  /* Wire product detail to browser history so the browser back button
+     closes the detail page instead of leaving the site. */
+  useEffect(() => {
+    if (!selProd) return;
+    window.history.pushState({ novoDetail: selProd }, "");
+    let viaPop = false;
+    const onPop = () => { viaPop = true; setSelProd(null); setSelVariant(null); };
+    window.addEventListener("popstate", onPop);
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      // If we left the detail page programmatically (tab change, etc.)
+      // pop our pushed entry so the history stays in sync.
+      if (!viaPop && window.history.state && window.history.state.novoDetail) {
+        window.history.back();
+      }
+    };
+  }, [selProd]);
+
   const activeProducts = useMemo(() => products.filter(p => p.active !== false), [products]);
   const catList = useMemo(() => Object.entries(categories).map(([id, data]) => ({
     id, nameEn: typeof data === "string" ? data : (data.nameEn || id), nameKo: typeof data === "string" ? data : (data.nameKo || data),
@@ -649,7 +667,7 @@ export default function NovoMarket() {
       const nm = pName(p); const dc = pDesc(p); const bp = basePrice(p);
       const ic = cart.find(c => c.id === p.id); const tp = ic ? tieredPrice(p, ic.qty) : bp;
       return <div className="novo-pdp-page" style={{ padding: 16, paddingBottom: 100, animation: "fadeUp .3s ease" }}>
-        <button onClick={() => { setSelProd(null); setSelVariant(null); }} style={{ ...B, background: "none", color: C.pri, padding: "4px 0 14px", fontSize: 14, display: "flex", alignItems: "center", gap: 4 }}>← {t.back}</button>
+        <button onClick={() => window.history.back()} style={{ ...B, background: "none", color: C.pri, padding: "4px 0 14px", fontSize: 14, display: "flex", alignItems: "center", gap: 4 }}>← {t.back}</button>
         <div className="novo-pdp">
         <div className="novo-pdp-gallery"><Gallery media={p.media} emoji={p.image} name={nm} /></div>
         <div className="novo-pdp-info" style={{ marginTop: 16 }}>
