@@ -682,15 +682,28 @@ export default function NovoMarket() {
             </div>
           </div>}
           {(() => { const vp = selVariant ? Number(selVariant.price) : bp; const origP = selVariant ? Number(selVariant.origPrice || p.price) : p.price; const isSale = selVariant ? (selVariant.origPrice && Number(selVariant.price) < Number(selVariant.origPrice)) : p.sale; return <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 12, padding: "12px 0", borderTop: `1px solid ${C.bdr}`, borderBottom: `1px solid ${C.bdr}` }}><span style={{ fontSize: 28, fontWeight: 900, color: isSale ? C.danger : C.pri }}>{fmt(vp)}</span>{isSale && <span style={{ fontSize: 15, textDecoration: "line-through", color: C.light }}>{fmt(origP)}</span>}</div>; })()}
-          {p.tiered && p.tiered.length > 0 && <div style={{ background: C.priL, borderRadius: 10, padding: "10px 14px", marginBottom: 14 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.pri, marginBottom: 6 }}>📦 {t.bulk}</div>
-            <div style={{ display: "flex", gap: 6 }}>
-              <div style={{ flex: 1, textAlign: "center", padding: "8px 4px", borderRadius: 8, background: (!ic || ic.qty < Number(p.tiered[0].qty)) ? C.pri : "#FFF", color: (!ic || ic.qty < Number(p.tiered[0].qty)) ? "#FFF" : C.txt, border: `1px solid ${C.pri}` }}><div style={{ fontSize: 10, opacity: .8 }}>1{t.ea}</div><div style={{ fontSize: 15, fontWeight: 800 }}>{fmt(bp)}</div></div>
-              {p.tiered.map((tier, i) => { const active = ic && ic.qty >= Number(tier.qty) && (i === p.tiered.length - 1 || ic.qty < Number(p.tiered[i + 1].qty)); const pct = Math.round((1 - Number(tier.price) / bp) * 100);
-                return <div key={i} style={{ flex: 1, textAlign: "center", padding: "8px 4px", borderRadius: 8, background: active ? C.pri : "#FFF", color: active ? "#FFF" : C.txt, border: `1px solid ${C.pri}`, position: "relative" }}>{pct > 0 && <div style={{ position: "absolute", top: -8, right: -4, background: C.acc, color: "#FFF", fontSize: 8, fontWeight: 700, padding: "1px 5px", borderRadius: 6 }}>-{pct}%</div>}<div style={{ fontSize: 10, opacity: .8 }}>{tier.qty}+</div><div style={{ fontSize: 15, fontWeight: 800 }}>{fmt(Number(tier.price))}</div></div>; })}
-            </div>
-            {ic && <div style={{ fontSize: 11, color: C.pri, fontWeight: 600, marginTop: 6, textAlign: "center" }}>✓ {t.cur}: {fmt(tp)}/{t.ea}</div>}
-          </div>}
+          {p.tiered && p.tiered.length > 0 && (() => {
+            const setQtyToTier = (q) => {
+              const cap = Math.max(1, Math.min(q, p.stock || q));
+              if ((p.stock ?? 1) <= 0) { setToast(lang === "ko" ? "품절된 상품입니다" : "Out of stock"); return; }
+              setCart(prev => {
+                const ex = prev.find(c => c.id === p.id);
+                if (ex) return prev.map(c => c.id === p.id ? { ...c, qty: cap } : c);
+                return [...prev, { ...p, id: p.id, productId: p.id, qty: cap }];
+              });
+              setToast(`${cap}${t.ea} · ${t.added}`);
+            };
+            const tierBtn = { flex: 1, textAlign: "center", padding: "10px 4px", borderRadius: 8, border: `1px solid ${C.pri}`, cursor: "pointer", fontFamily: "inherit", transition: "transform .12s ease" };
+            return <div style={{ background: C.priL, borderRadius: 10, padding: "10px 14px", marginBottom: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.pri, marginBottom: 6 }}>📦 {t.bulk}</div>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button onClick={() => setQtyToTier(1)} style={{ ...tierBtn, background: (!ic || ic.qty < Number(p.tiered[0].qty)) ? C.pri : "#FFF", color: (!ic || ic.qty < Number(p.tiered[0].qty)) ? "#FFF" : C.txt }}><div style={{ fontSize: 10, opacity: .8 }}>1{t.ea}</div><div style={{ fontSize: 15, fontWeight: 800 }}>{fmt(bp)}</div></button>
+                {p.tiered.map((tier, i) => { const active = ic && ic.qty >= Number(tier.qty) && (i === p.tiered.length - 1 || ic.qty < Number(p.tiered[i + 1].qty)); const pct = Math.round((1 - Number(tier.price) / bp) * 100);
+                  return <button key={i} onClick={() => setQtyToTier(Number(tier.qty))} style={{ ...tierBtn, background: active ? C.pri : "#FFF", color: active ? "#FFF" : C.txt, position: "relative" }}>{pct > 0 && <div style={{ position: "absolute", top: -8, right: -4, background: C.acc, color: "#FFF", fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 6 }}>-{pct}%</div>}<div style={{ fontSize: 10, opacity: .8 }}>{tier.qty}+</div><div style={{ fontSize: 15, fontWeight: 800 }}>{fmt(Number(tier.price))}</div></button>; })}
+              </div>
+              {ic && <div style={{ fontSize: 11, color: C.pri, fontWeight: 600, marginTop: 6, textAlign: "center" }}>✓ {t.cur}: {fmt(tp)}/{t.ea}</div>}
+            </div>;
+          })()}
           <div style={{ fontSize: 14, lineHeight: 1.7, color: C.mid, margin: "0 0 20px" }}>{renderDesc(dc)}</div>
           {(() => { const hasVars = p.variants && p.variants.length > 0; const needsVariant = hasVars && !selVariant; const cartId = selVariant ? `${p.id}__${selVariant.label}` : p.id; const ic2 = cart.find(c => c.id === cartId); const availStock = selVariant ? (selVariant.stock ?? p.stock) : (hasVars ? null : p.stock); const isSoldOut = hasVars ? (selVariant ? (selVariant.stock ?? 0) <= 0 : false) : p.stock === 0;
             return isSoldOut ? <div style={{ ...B, width: "100%", padding: 14, fontSize: 15, textAlign: "center", background: "#CCC", color: "#FFF", borderRadius: 12 }}>{t.sold}</div>
