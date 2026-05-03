@@ -714,7 +714,6 @@ export default function NovoMarket() {
               <button onClick={() => { if (needsVariant) { setToast(lang === "ko" ? "옵션을 선택해주세요" : "Please select an option"); return; } addToCart(p, selVariant); }} style={{ ...B, flex: 1, padding: 14, fontSize: 15, background: needsVariant ? "#CCC" : C.pri, color: "#FFF", borderRadius: 12, boxShadow: needsVariant ? "none" : "0 3px 12px rgba(91,154,139,.3)" }}>{needsVariant ? (lang === "ko" ? "옵션을 선택해주세요" : "Select an option") : ic2 ? `✓ ${t.add}` : t.add}</button>
             </div>; })()}
           {(() => { const stk = selVariant ? (selVariant.stock ?? p.stock) : p.stock; return stk > 0 && stk <= 10 ? <div style={{ marginTop: 10, fontSize: 12, color: "#E67E22", fontWeight: 600 }}>⚡ {lang === "en" ? `Only ${stk} left!` : `${stk}개 남음!`}</div> : null; })()}
-          <button onClick={() => window.history.back()} style={{ ...B, width: "100%", padding: 12, marginTop: 12, fontSize: 13, background: "transparent", color: C.mid, border: `1px solid ${C.bdr}`, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}><Icon name="chevronLeft" size={16} stroke={2} />{t.back}</button>
         </div>
         </div>
       </div>;
@@ -919,13 +918,17 @@ export default function NovoMarket() {
     {/* ─── EDIT ORDER ─── */}
     {page === "history" && editingOrder && <EditOrderPanel order={editingOrder} products={products} lang={lang} t={t} C={C} B={B} pName={pName} onClose={() => setEditingOrder(null)} onUpdate={handleUpdateOrder} onDelete={handleDeleteOrder} />}
 
-    {/* ─── BOTTOM TAB BAR (3 tabs) ─── */}
+    {/* ─── BOTTOM TAB BAR ─── */}
     <div className="novo-bottom-nav" style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 560, background: "#FFF", display: "flex", zIndex: 100, boxShadow: "0 -4px 20px rgba(0,0,0,.08)", borderRadius: "16px 16px 0 0", padding: "2px 0" }}>
+      {selProd && <button onClick={() => window.history.back()} style={{ flex: 1, border: "none", background: "none", cursor: "pointer", padding: "10px 0 8px", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, position: "relative", transition: "all .2s", color: C.pri }}>
+        <div style={{ display: "inline-flex" }}><Icon name="chevronLeft" size={22} stroke={2.2} /></div>
+        <span style={{ fontSize: 10, fontWeight: 800, color: C.pri }}>{t.back}</span>
+      </button>}
       {[{ k: "shop", i: "home", l: t.shop }, { k: "cart", i: "cart", l: t.cart, badge: cartN }, { k: "history", i: "list", l: t.history }].map(tab =>
-        <button key={tab.k} onClick={() => { setPage(tab.k); resetAll(); }} style={{ flex: 1, border: "none", background: "none", cursor: "pointer", padding: "10px 0 8px", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, position: "relative", fontFamily: "'Nunito',sans-serif", transition: "all .2s", color: page === tab.k ? C.pri : C.light }}>
-          <div style={{ position: "relative", transition: "transform .2s", transform: page === tab.k ? "scale(1.08)" : "scale(1)", display: "inline-flex" }}><Icon name={tab.i} size={22} stroke={page === tab.k ? 2.2 : 1.8} />{tab.badge > 0 && <span style={{ position: "absolute", top: -6, right: -10, background: C.acc, color: "#FFF", borderRadius: "50%", width: 17, height: 17, fontSize: 9, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 4px rgba(216,86,116,.4)" }}>{tab.badge}</span>}</div>
-          <span style={{ fontSize: 10, fontWeight: page === tab.k ? 800 : 500, color: page === tab.k ? C.pri : C.light }}>{tab.l}</span>
-          {page === tab.k && <div style={{ position: "absolute", top: 0, left: "30%", right: "30%", height: 3, background: C.pri, borderRadius: "0 0 3px 3px" }} />}
+        <button key={tab.k} onClick={() => { setPage(tab.k); resetAll(); }} style={{ flex: 1, border: "none", background: "none", cursor: "pointer", padding: "10px 0 8px", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, position: "relative", transition: "all .2s", color: !selProd && page === tab.k ? C.pri : C.light }}>
+          <div style={{ position: "relative", transition: "transform .2s", transform: !selProd && page === tab.k ? "scale(1.08)" : "scale(1)", display: "inline-flex" }}><Icon name={tab.i} size={22} stroke={!selProd && page === tab.k ? 2.2 : 1.8} />{tab.badge > 0 && <span style={{ position: "absolute", top: -6, right: -10, background: C.acc, color: "#FFF", borderRadius: "50%", width: 17, height: 17, fontSize: 9, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 4px rgba(216,86,116,.4)" }}>{tab.badge}</span>}</div>
+          <span style={{ fontSize: 10, fontWeight: !selProd && page === tab.k ? 800 : 500, color: !selProd && page === tab.k ? C.pri : C.light }}>{tab.l}</span>
+          {!selProd && page === tab.k && <div style={{ position: "absolute", top: 0, left: "30%", right: "30%", height: 3, background: C.pri, borderRadius: "0 0 3px 3px" }} />}
         </button>)}
     </div>
   </div>;
